@@ -1,0 +1,24 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "FastAPI backend for the scaffold-base template (Python + uv, SQLAlchemy/psycopg, Pydantic Settings)."
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "ElPitagoras14" },
+]
+license = "MIT"
+keywords = ["fastapi", "template", "scaffold", "backend", "sqlalchemy", "uv"]
+dependencies = [
+    "bcrypt>=5.0.0",
+    "fastapi[standard]>=0.141.1",
+    "loguru>=0.7.3",
+    "psycopg>=3.3.5",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.3",
+    "sqlalchemy>=2.0.52",
+]
+
+[project.urls]
+Repository = "https://github.com/ElPitagoras14/scaffold-base"
