@@ -189,3 +189,7 @@ dist-ssr
 .vinxi
 __unconfig*
 todos.json
+
+# --- Local ---
+# Notas y material de trabajo que no se versiona
+local/

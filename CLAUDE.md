@@ -24,3 +24,7 @@ Guía para Claude Code al trabajar en este repositorio.
 - Seguir la regla 50/72: título (primera línea) de máximo 50 caracteres, línea en blanco, y cuerpo con líneas envueltas a máximo 72 caracteres.
 - En el cuerpo, no dejar línea en blanco entre oraciones: el cuerpo va como uno o varios párrafos de prosa continua (sin una oración por línea separada por saltos).
 - Nunca incluirse a sí mismo (Claude) como coautor: no agregar líneas `Co-Authored-By` que referencien a Claude o Anthropic.
+
+## OpenSpec
+
+- Al aplicar (`apply`) un change de OpenSpec, crear siempre una nueva rama a partir de `main` actualizada, sin configurar upstream hacia `main`.
