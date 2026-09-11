@@ -1,0 +1,39 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+rules:
+  design:
+    - Incluir SIEMPRE la sección "## Open Questions", aunque no quede ninguna pregunta abierta. Omitirla hace imposible distinguir "no hay preguntas" de "no se buscaron".
+    - La sección tiene dos partes. Primero, las preguntas que siguen abiertas; si no queda ninguna, escribir "Ninguna" y decir en una línea por qué el change no dejó nada sin decidir.
+    - Segundo, bajo el subtítulo "Resueltas durante la redacción", registrar las preguntas que surgieron al escribir el diseño y se resolvieron sobre la marcha, indicando en cada caso qué información permitió cerrarlas: una decisión de otro change, un dato verificado en documentación, una derivación aritmética o una respuesta del usuario. Esa lista es el rastro del razonamiento y explica por qué una decisión tiene el valor que tiene.
+    - Una pregunta solo queda abierta si es genuinamente diferible: responderla ahora exigiría adivinar sin datos, y responderla después no cambia los specs, el enfoque ni el reparto de tareas. Si una pregunta cambiaría alguna de esas tres cosas, hay que resolverla antes de terminar el diseño, preguntándole al usuario si hace falta.
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
