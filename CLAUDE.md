@@ -25,6 +25,11 @@ Guía para Claude Code al trabajar en este repositorio.
 - En el cuerpo, no dejar línea en blanco entre oraciones: el cuerpo va como uno o varios párrafos de prosa continua (sin una oración por línea separada por saltos).
 - Nunca incluirse a sí mismo (Claude) como coautor: no agregar líneas `Co-Authored-By` que referencien a Claude o Anthropic.
 
+### Descripción de MR/PR
+
+- Redactar la descripción del MR/PR en español (a diferencia del mensaje de commit, que va en inglés).
+- Sin saltos de línea manuales entre oraciones: cada párrafo o bullet es una sola línea de prosa continua, igual que el resto del markdown del repo (no envolver como el cuerpo de un commit).
+
 ## OpenSpec
 
 - Al aplicar (`apply`) un change de OpenSpec, crear siempre una nueva rama a partir de `main` actualizada, sin configurar upstream hacia `main`.
