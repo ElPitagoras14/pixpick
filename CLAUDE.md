@@ -28,3 +28,4 @@ Guía para Claude Code al trabajar en este repositorio.
 ## OpenSpec
 
 - Al aplicar (`apply`) un change de OpenSpec, crear siempre una nueva rama a partir de `main` actualizada, sin configurar upstream hacia `main`.
+- Al aplicar un change, cronometrar desde que arranca la tarea hasta que se devuelve el control al usuario. Si a medio camino surge una consulta (`AskUserQuestion` u otra pregunta que corte el trabajo), detener el cronómetro antes de preguntar y reanudarlo recién cuando el usuario responda: ese tiempo de espera no cuenta. Registrar el resultado en `local/tiempos.md`, en una sección nueva con el nombre del change (`## <nombre-del-change>`), con los cortes de hora (inicio, cada pausa/reanudación, fin) y el tiempo activo total ya restadas las pausas.
