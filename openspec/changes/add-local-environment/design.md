@@ -73,6 +73,8 @@ Este change crea las primeras rutas, así que fija la convención. Un archivo de
 
 La contracara importa tanto como la regla: no se crea un hook que solo envuelva una consulta, ni un componente que solo reenvíe props, ni un archivo de utilidades para una función de dos líneas usada en un lugar, ni carpetas con un solo archivo dentro. La prueba es si la división permite entender o cambiar una parte sin leer las otras; cuando las piezas solo tienen sentido juntas, un archivo es el mejor diseño.
 
+**Nota agregada durante la implementación:** el diseño original de este change incluía un layout `_app` vacío para agrupar las rutas autenticadas. Se descartó al implementar: TanStack Router calcula la ruta completa de un layout pathless quitándole el segmento con guion bajo, así que un `_app` sin ningún hijo queda con la misma ruta completa (`/`) que `index.tsx`, y `pnpm generate-routes` lo rechaza como conflicto de rutas duplicadas — verificado tanto con la forma de archivo (`_app.tsx`) como con la de directorio (`_app/route.tsx`). El layout deja de chocar en cuanto tiene un hijo real, así que se crea recién en el change que agregue su primera ruta protegida.
+
 ### D9 - Las URLs absolutas se derivan de la configuración, no del request entrante
 
 El edge habla HTTP incluso en producción, porque TLS lo termina el proxy de la plataforma. Eso significa que el esquema y el host que el backend ve en la petición no son los que ve el navegador. Cualquier URL absoluta que el sistema genere se construye a partir del valor configurado de la URL pública, nunca a partir del esquema o el host del request.

@@ -11,11 +11,13 @@ Hoy el repositorio es un scaffold sin infraestructura declarada: el backend expo
 - **Imágenes de backend y frontend**: un `Dockerfile` por servicio. El frontend además lleva un `entrypoint.sh`, porque es el mecanismo que inyecta la configuración en runtime antes de arrancar su nginx; el backend no lo necesita y arranca con un comando directo.
 - **Configuración del SPA en runtime**: el frontend recibe su configuración al arrancar el contenedor, no al construirlo, para que la misma imagen sirva en cualquier entorno sin rebuild.
 - **`.env.example` mínimo**: solo las variables que este change necesita, con un bloque explícito de puertos locales. Cada change posterior agrega las suyas.
-- **Shell del frontend**: `__root.tsx`, ruta índice, `login.tsx` como placeholder y el layout `_app` vacío, con tipografía, tema y estructura mobile-first.
+- **Shell del frontend**: `__root.tsx`, ruta índice y `login.tsx` como placeholder, con tipografía, tema y estructura mobile-first.
 - **Healthcheck**: un endpoint que el edge expone y que permite verificar la cadena completa navegador → nginx → backend.
 - **Convenciones del repositorio**: archivo `VERSION` en la raíz.
 
 ### Fuera de alcance
+
+- **El layout `_app`**: se descarta para este change. TanStack Router calcula la ruta completa de un layout pathless quitándole el segmento con guion bajo, así que un `_app/route.tsx` sin ningún hijo queda con la misma ruta completa (`/`) que `index.tsx`, y `pnpm generate-routes` lo rechaza como conflicto — se verificó tanto en la forma de archivo (`_app.tsx`) como en la de directorio (`_app/route.tsx`). El layout solo deja de chocar cuando tiene al menos un hijo real, así que se crea en el change que agregue su primera ruta protegida (candidato: `add-auth-port-and-local-provider`, que suma el guard de sesión).
 
 Estos puntos quedan explícitamente fuera y pertenecen a changes posteriores o al no-goal del proyecto:
 
@@ -50,7 +52,7 @@ Ninguna. `openspec/specs/` está vacío: este es el primer change del proyecto.
 **Archivos modificados**
 
 - `backend/src/main.py`: healthcheck y montaje del router bajo el prefijo del edge.
-- `frontend/src/routes/`: `__root.tsx`, `index.tsx`, `login.tsx`, `_app/route.tsx`.
+- `frontend/src/routes/`: `__root.tsx`, `index.tsx`, `login.tsx`.
 - `frontend/src/config.ts`: lectura de la configuración inyectada en runtime.
 - `frontend/index.html`: carga del archivo de configuración.
 - `README.md`: instrucciones de arranque del proyecto.

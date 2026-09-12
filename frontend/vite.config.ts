@@ -14,6 +14,17 @@ const config = defineConfig({
 		tanstackRouter({ target: "react", autoCodeSplitting: true }),
 		viteReact(),
 	],
+	server: {
+		proxy: {
+			// Keeps the native dev flow on a single origin (D10): the frontend
+			// still requests the relative `/api` space, and the dev server
+			// forwards it to the backend's native default port (`fastapi dev`).
+			"/api": {
+				target: "http://localhost:8000",
+				changeOrigin: true,
+			},
+		},
+	},
 });
 
 export default config;

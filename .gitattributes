@@ -1,5 +1,24 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
-# Shell scripts must always use LF (for Linux containers)
+# Force LF regardless of platform checkout settings (core.autocrlf) for
+# every text format this project actually edits: shell scripts running
+# inside Linux containers can't tolerate CRLF, and Biome's formatter
+# enforces LF on the frontend sources it checks -- either would otherwise
+# fail after a Windows checkout with autocrlf enabled.
 *.sh text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.conf text eol=lf
+Dockerfile text eol=lf
