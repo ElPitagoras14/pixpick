@@ -9,10 +9,11 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
 
-  # Source mounted over the image's copy, and `fastapi dev` (autoreload)
-  # instead of the Dockerfile's `fastapi run`, so editing backend code
-  # doesn't require rebuilding the image.
+  # Source mounted over the image's copy, and --reload instead of the
+  # Dockerfile's plain command, so editing backend code doesn't require
+  # rebuilding the image. See backend/Dockerfile for why this is uvicorn
+  # directly instead of `fastapi dev`.
   backend:
     volumes:
       - ./backend/src:/app/src
-    command: ["fastapi", "dev", "src/main.py", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--loop", "src.loop:loop_factory"]

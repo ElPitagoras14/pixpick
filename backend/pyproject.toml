@@ -13,7 +13,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "fastapi[standard]>=0.141.1",
     "loguru>=0.7.3",
-    "psycopg>=3.3.5",
+    "psycopg[binary]>=3.3.5",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.3",
@@ -22,3 +22,21 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/ElPitagoras14/scaffold-base"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
