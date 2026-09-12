@@ -40,11 +40,11 @@ To stop everything (keeping the database volume): `docker compose -f compose.yam
 The backend and the frontend can also run directly on the host instead of in containers, while Postgres still runs via Compose:
 
 ```bash
-docker compose -f compose.yaml -f compose.dev.yaml up -d postgres
+docker compose -f compose.yaml -f compose.dev.yaml up -d postgres migrate
 
 cd backend
 uv sync
-uv run fastapi dev src/main.py   # http://localhost:8000
+uv run uvicorn src.main:app --reload --loop src.loop:loop_factory   # http://localhost:8000
 
 cd frontend
 pnpm install
@@ -65,6 +65,46 @@ Both modes read the same `.env` and the same variable names (see the comments in
 | Logging              | [loguru](https://github.com/Delgan/loguru)     |
 | Security             | [bcrypt](https://pypi.org/project/bcrypt/) (password hashing) |
 | Environment config   | [python-dotenv](https://pypi.org/project/python-dotenv/) |
+| Lint / format         | [Ruff](https://docs.astral.sh/ruff/)           |
+
+### Database migrations (`dbmate/`)
+
+The schema evolves as plain SQL migrations applied with [dbmate](https://github.com/amacneil/dbmate), pinned to `2.35.1` -- the same version everywhere it's referenced (`dbmate/Dockerfile`, `backend/tests/conftest.py`, and here; see that Dockerfile's comment if you're upgrading it).
+
+```bash
+# create a new migration -- rename the generated file to the next
+# zero-padded number (e.g. 0002_...) to match the existing ones
+docker run --rm -v "$(pwd)/dbmate:/db" ghcr.io/amacneil/dbmate:2.35.1 new create_some_table
+
+# apply pending migrations against the dev database and regenerate
+# dbmate/schema.sql (compose already runs this via the `migrate` service on
+# `docker compose up`; use this directly if you only started `postgres`)
+docker run --rm --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL="postgres://pixpick:pixpick_dev_password@host.docker.internal:${POSTGRES_PORT:-5432}/pixpick?sslmode=disable" \
+  -v "$(pwd)/dbmate:/db" \
+  ghcr.io/amacneil/dbmate:2.35.1 migrate
+```
+
+`dbmate/schema.sql` is versioned so the schema can be read and diffed without running anything; the `migrate` command above regenerates it every time, whether or not it actually applied a new migration.
+
+### Tests
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d postgres
+cd backend
+uv sync
+uv run pytest
+```
+
+Runs against the same Postgres the dev environment uses, on a separate `<POSTGRES_DB>_test` database (`pixpick_test` by default) that the suite creates and migrates itself, with the pinned dbmate version above, the first time it runs. No other setup, and no manual cleanup between runs.
+
+### Lint & format
+
+```bash
+cd backend
+uv run ruff format .   # formats the code
+uv run ruff check .    # lints; add --fix to auto-fix what it can
+```
 
 ### Upgrade dependencies to the latest version
 

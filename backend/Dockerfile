@@ -18,4 +18,7 @@ RUN uv sync --locked
 
 EXPOSE 8000
 
-CMD ["fastapi", "run", "src/main.py", "--host", "0.0.0.0", "--port", "8000"]
+# uvicorn directly instead of `fastapi run`: the latter doesn't expose
+# --loop, which src/loop.py needs to keep native mode working on Windows
+# (see that module's docstring).
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "src.loop:loop_factory"]
