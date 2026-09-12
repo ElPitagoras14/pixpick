@@ -1,7 +1,7 @@
 services:
-  edge:
+  nginx:
     ports:
-      - "${EDGE_PORT}:80"
+      - "${NGINX_PORT}:80"
 
   # Published only so a database client on the host can inspect it (D7);
   # nothing in this change connects to it yet.
@@ -9,11 +9,14 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
 
-  # Source mounted over the image's copy, and --reload instead of the
-  # Dockerfile's plain command, so editing backend code doesn't require
-  # rebuilding the image. See backend/Dockerfile for why this is uvicorn
-  # directly instead of `fastapi dev`.
-  backend:
-    volumes:
-      - ./backend/src:/app/src
-    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--loop", "src.loop:loop_factory"]
+  # Published because the browser writes to it directly (D3, D4); the
+  # transformer is not published, it is only ever reached through nginx.
+  storage:
+    ports:
+      - "${STORAGE_PORT}:9000"
+
+  # No dev-only override: the backend builds from its Dockerfile the same
+  # way in every environment for now. Rebuild the image to pick up a code
+  # change (`docker compose ... up --build backend`). A later change is
+  # what's expected to make compose.yaml pull a published image instead,
+  # at which point this file would be where the local build lives.

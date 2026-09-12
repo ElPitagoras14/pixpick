@@ -42,8 +42,21 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       IDENTITY_PROVIDER: ${IDENTITY_PROVIDER}
       PUBLIC_URL: ${PUBLIC_URL}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_BROWSER_ENDPOINT: ${STORAGE_BROWSER_ENDPOINT}
+      # Containers mode reaches the storage by its service name; the native
+      # default in .env.example is the host-published port instead (D4).
+      STORAGE_SERVER_ENDPOINT: http://storage:9000
+      STORAGE_ROOT_USER: ${STORAGE_ROOT_USER}
+      STORAGE_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER}
+      IMAGE_SIGNING_KEY: ${IMAGE_SIGNING_KEY}
+      IMAGE_SIGNING_SALT: ${IMAGE_SIGNING_SALT}
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      storage-init:
         condition: service_completed_successfully
     networks:
       - pixpick
@@ -57,12 +70,84 @@ services:
     networks:
       - pixpick
 
-  # The single door to the host. No other service in this file publishes a
-  # port: the platform's own proxy reaches them over this network instead
-  # (D7). compose.dev.yaml is what opens ports on a developer's machine.
-  edge:
+  # The object storage. The browser writes to it directly (D3 in
+  # add-media-ports-and-local-adapters), so unlike every other service in
+  # this file it is meant to be reached from outside the Docker network too
+  # -- compose.dev.yaml is what publishes its port.
+  storage:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD}
+      # MinIO has no per-bucket CORS API -- PutBucketCors is a permanent
+      # no-op on its server (verified against its source: every bucket-CORS
+      # handler always answers NotImplemented). Origins are declared here
+      # instead, server-wide, which is exactly as precise as a per-bucket
+      # policy given this project has a single bucket (D3, D9 in
+      # add-media-ports-and-local-adapters).
+      MINIO_API_CORS_ALLOW_ORIGIN: ${STORAGE_ALLOWED_ORIGINS}
+    command: ["server", "/data"]
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks:
+      - pixpick
+
+  # Runs once against the storage and exits: creates its bucket, so a
+  # clean clone needs no manual step -- the same guarantee `migrate` gives
+  # for the schema.
+  storage-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    environment:
+      STORAGE_SERVER_ENDPOINT: http://storage:9000
+      STORAGE_ROOT_USER: ${STORAGE_ROOT_USER}
+      STORAGE_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+    volumes:
+      - ./storage/init.sh:/init/init.sh:ro
+    depends_on:
+      storage:
+        condition: service_healthy
+    networks:
+      - pixpick
+
+  # The image transformer. It reads originals from the storage by itself
+  # (D2): nothing in this project ever hands it bytes. It publishes no port
+  # -- nginx is the only way to reach it (D5), unlike the storage above.
+  transformer:
+    image: darthsim/imgproxy:v4.0.14
+    environment:
+      IMGPROXY_KEY: ${IMAGE_SIGNING_KEY}
+      IMGPROXY_SALT: ${IMAGE_SIGNING_SALT}
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_ENDPOINT: http://storage:9000
+      IMGPROXY_S3_REGION: us-east-1
+      IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${STORAGE_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_ROOT_PASSWORD}
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+    networks:
+      - pixpick
+
+  # The single door to the host: routes to the backend, the transformer, and
+  # the frontend. No other service in this file publishes a port: the
+  # platform's own proxy reaches them over this network instead (D7).
+  # compose.dev.yaml is what opens ports on a developer's machine.
+  nginx:
     build:
-      context: ./edge
+      context: ./nginx
+    volumes:
+      # The images cache (D12 in add-media-ports-and-local-adapters): a
+      # volume, not an anonymous layer, so it survives a container
+      # restart instead of re-warming from nothing every time.
+      - nginx-cache:/var/cache/nginx/images
     networks:
       - pixpick
 
@@ -71,3 +156,5 @@ networks:
 
 volumes:
   postgres-data:
+  storage-data:
+  nginx-cache:

@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "production"]
 
     # The site's own address, used to build any absolute URL the backend
-    # generates instead of trusting the request's scheme or host: the edge
+    # generates instead of trusting the request's scheme or host: nginx
     # never sees TLS, since the platform's proxy terminates it in front of
     # it (D9 in add-local-environment).
     public_url: str

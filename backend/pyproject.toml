@@ -11,6 +11,7 @@ license = "MIT"
 keywords = ["fastapi", "template", "scaffold", "backend", "sqlalchemy", "uv"]
 dependencies = [
     "bcrypt>=5.0.0",
+    "boto3>=1.43.93",
     "fastapi[standard]>=0.141.1",
     "loguru>=0.7.3",
     "psycopg[binary]>=3.3.5",
