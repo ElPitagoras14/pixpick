@@ -8,6 +8,9 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- Loaded synchronously, before the bundle, so window.__PIXPICK_CONFIG__
+         already exists once the application code runs (D4). -->
+    <script src="/config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

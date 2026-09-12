@@ -1,16 +1,57 @@
-# Scaffold Base
+# pixpick
 
-Base template to bootstrap projects quickly: **Python backend (FastAPI + uv)** and **React frontend (TanStack + Vite)**, already configured with linting, formatting, and the most common dependencies preinstalled.
+Share photo albums and rate photos with a swipe. **Python backend (FastAPI + uv)**, **React frontend (TanStack + Vite)**, and an nginx edge that puts both behind a single origin, all orchestrated with Docker Compose.
 
 > License: [MIT](./LICENSE).
 
 ## Structure
 
 ```
-scaffold-base/
+pixpick/
 ├── backend/     # FastAPI API, managed with uv
-└── frontend/    # React SPA with TanStack Router/Query and Vite
+├── frontend/    # React SPA with TanStack Router/Query and Vite
+└── edge/        # nginx: the only door to the host
 ```
+
+## Services
+
+| Service    | What it does                                                          | Reachable from the host?                          |
+| ---------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
+| `edge`     | Routes `/api` to the backend and everything else to the frontend      | Yes -- `EDGE_PORT` (the app's single entry point)   |
+| `backend`  | FastAPI API, mounted under `/api`                                      | No -- only through `edge`                           |
+| `frontend` | Builds the SPA once; serves it and receives its config at container start | No -- only through `edge`                        |
+| `postgres` | Database                                                               | Yes -- `POSTGRES_PORT` (so a DB client can inspect it) |
+
+The interface and the API are always requested from the same origin: the browser never talks to `backend` or `frontend` directly, only to `edge`.
+
+## Getting started
+
+```bash
+cp .env.example .env
+docker compose -f compose.yaml -f compose.dev.yaml up --build
+```
+
+Open `http://localhost:${EDGE_PORT}` (`8080` by default). That single command builds every image, starts Postgres, the backend, the frontend, and the edge, and leaves the app ready -- no other manual step.
+
+To stop everything (keeping the database volume): `docker compose -f compose.yaml -f compose.dev.yaml down`. Add `-v` to also drop the Postgres data.
+
+### Native mode
+
+The backend and the frontend can also run directly on the host instead of in containers, while Postgres still runs via Compose:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d postgres
+
+cd backend
+uv sync
+uv run fastapi dev src/main.py   # http://localhost:8000
+
+cd frontend
+pnpm install
+pnpm dev                          # http://localhost:3000, proxies /api to the backend
+```
+
+Both modes read the same `.env` and the same variable names (see the comments in `.env.example`); only which process serves the backend and the frontend changes. Open `http://localhost:3000` in this mode -- the frontend dev server keeps a single origin by proxying `/api` to the backend itself, the same way `edge` does in the container mode above.
 
 ## Backend (`backend/`)
 
@@ -24,14 +65,6 @@ scaffold-base/
 | Logging              | [loguru](https://github.com/Delgan/loguru)     |
 | Security             | [bcrypt](https://pypi.org/project/bcrypt/) (password hashing) |
 | Environment config   | [python-dotenv](https://pypi.org/project/python-dotenv/) |
-
-### Setup
-
-```bash
-cd backend
-uv sync              # creates the venv and installs dependencies from uv.lock
-uv run fastapi dev src/main.py   # development server
-```
 
 ### Upgrade dependencies to the latest version
 
@@ -62,14 +95,6 @@ uv self update
 | HTTP client           | [axios](https://axios-http.com/)                                  |
 | Typography            | [@fontsource-variable/inter](https://fontsource.org/fonts/inter)  |
 | Lint / format         | [Biome](https://biomejs.dev/)                                     |
-
-### Setup
-
-```bash
-cd frontend
-pnpm install
-pnpm dev              # http://localhost:3000
-```
 
 ### Available scripts
 
