@@ -14,6 +14,13 @@ Se admite una excepción acotada: un servicio de terceros contra el que el naveg
 - **THEN** la petición viaja al mismo origen desde el que se cargó la interfaz
 - **AND** el navegador no necesita una negociación de origen cruzado
 
+#### Scenario: El punto de entrada reparte según la ruta
+
+- **WHEN** se pide una ruta del espacio reservado a la API
+- **THEN** responde el backend
+- **WHEN** se pide cualquier otra ruta
+- **THEN** responde la interfaz
+
 #### Scenario: El punto de entrada reparte según el espacio reservado
 
 - **WHEN** se pide una ruta que pertenece a un espacio reservado

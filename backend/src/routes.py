@@ -4,9 +4,9 @@ from src.health import router as health_router
 from src.identity.config import identity_settings
 from src.packages.auth.router import router as auth_router
 
-# The browser and the backend see the exact same path: the edge proxies
+# The browser and the backend see the exact same path: nginx proxies
 # `/api` without rewriting it (D2), so the prefix lives here instead of
-# being stripped and re-added at the edge.
+# being stripped and re-added at nginx.
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health_router)
 api_router.include_router(auth_router)

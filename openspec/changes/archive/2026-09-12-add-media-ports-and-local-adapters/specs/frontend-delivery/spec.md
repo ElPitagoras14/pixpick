@@ -18,6 +18,12 @@ El fallback que devuelve el documento SHALL NOT alcanzar a ninguno de los espaci
 - **THEN** se recibe igualmente el documento de la aplicación
 - **AND** es la aplicación la que muestra su propia pantalla de recurso no encontrado
 
+#### Scenario: El espacio de la API no se confunde con una ruta de la aplicación
+
+- **WHEN** se pide una ruta del espacio reservado a la API que no existe
+- **THEN** la respuesta proviene del backend
+- **AND** no se entrega el documento de la interfaz
+
 #### Scenario: Ningún espacio reservado se confunde con una ruta de la aplicación
 
 - **WHEN** se pide una ruta inexistente dentro de cualquiera de los espacios reservados
