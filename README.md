@@ -53,6 +53,12 @@ pnpm dev                          # http://localhost:3000, proxies /api to the b
 
 Both modes read the same `.env` and the same variable names (see the comments in `.env.example`); only which process serves the backend and the frontend changes. Open `http://localhost:3000` in this mode -- the frontend dev server keeps a single origin by proxying `/api` to the backend itself, the same way `edge` does in the container mode above.
 
+### Signing in
+
+`IDENTITY_PROVIDER` selects which identity provider the backend authenticates people against. The only value this project supports so far is `local`: a credential-less sign-in screen the backend itself serves, so the rest of the app -- and anyone developing against it -- never needs real OAuth credentials. Click "Continue" on the login page, type any email on the screen that follows, and you're signed in as that person.
+
+The `local` provider only works when `ENVIRONMENT=development`: the code it accepts isn't backed by anything a stranger couldn't also send, so the backend refuses to start with `IDENTITY_PROVIDER=local` under any other `ENVIRONMENT`, naming the reason in the startup error instead of silently exposing it.
+
 ## Backend (`backend/`)
 
 | Category           | Technology                                     |
