@@ -21,7 +21,13 @@ async def tables_with_column(connection: AsyncConnection, column: str) -> list[s
 async def triggers_of_table(connection: AsyncConnection, table: str) -> list[str]:
     """Names of the triggers declared on `table`."""
     result = await connection.execute(
-        text("select tgname from pg_trigger where tgrelid = :table::regclass and not tgisinternal"),
+        # Parenthesized so SQLAlchemy's bind-parameter parser doesn't choke
+        # on ":table" immediately followed by Postgres's "::" cast operator
+        # -- untested until this change added the first real tables to
+        # check (see tasks.md 1.3).
+        text(
+            "select tgname from pg_trigger where tgrelid = (:table)::regclass and not tgisinternal"
+        ),
         {"table": table},
     )
     return [row[0] for row in result.all()]

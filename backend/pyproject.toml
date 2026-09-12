@@ -40,3 +40,14 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom: `Depends(...)`, `Cookie(...)`, and
+# friends as parameter defaults are how a route declares what it needs
+# (session-management spec), not a mutable-default bug (B008).
+extend-immutable-calls = [
+    "fastapi.Cookie",
+    "fastapi.Depends",
+    "fastapi.Form",
+    "fastapi.Query",
+]

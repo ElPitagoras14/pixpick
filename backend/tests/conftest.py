@@ -9,7 +9,11 @@ import psycopg
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
+from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
+
+from src.database.dependencies import get_connection
+from src.main import app
 
 # psycopg3's async mode cannot run on asyncio's default ProactorEventLoop on
 # Windows (see backend/src/loop.py). pytest-asyncio creates its loop through
@@ -124,3 +128,28 @@ async def connection(test_engine: AsyncEngine) -> AsyncIterator[AsyncConnection]
             yield connection
         finally:
             await transaction.rollback()
+
+
+@pytest_asyncio.fixture
+async def client(connection: AsyncConnection) -> AsyncIterator[TestClient]:
+    """An HTTP client against the real app, with `get_connection`
+    overridden to reuse this test's own rollback-only `connection`
+    instead of opening one against the dev database. Each request still
+    gets its own transaction boundary via a savepoint, mirroring
+    production's one-transaction-per-request shape (D3 in
+    add-backend-data-layer) while nesting inside the outer rollback that
+    undoes everything at teardown.
+    """
+
+    async def override_get_connection() -> AsyncIterator[AsyncConnection]:
+        async with connection.begin_nested():
+            yield connection
+
+    app.dependency_overrides[get_connection] = override_get_connection
+    try:
+        # Redirects aren't followed automatically: the auth flow's own
+        # tests inspect each hop's status and Location header in turn.
+        with TestClient(app, follow_redirects=False) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.pop(get_connection, None)
