@@ -13,7 +13,14 @@ class IdentitySettings(BaseSettings):
     # Extended with each provider this project adds. An unrecognized
     # value fails startup naming the accepted ones (identity-provider
     # spec) instead of surfacing on the first login attempt.
-    identity_provider: Literal["local"]
+    identity_provider: Literal["local", "google"]
+
+    # The application's credentials in Google's console. Optional here --
+    # a `Literal` field can't say "required only for one provider" -- so
+    # the factory is what actually enforces their presence, and only for
+    # the provider that's active (D6, identity-provider spec).
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
 
 
 identity_settings = IdentitySettings()  # type: ignore[call-arg]

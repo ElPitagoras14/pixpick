@@ -1,5 +1,7 @@
 from src.config import settings
+from src.identity.adapters.google import GoogleAuthAdapter, google_redirect_uri
 from src.identity.adapters.local import LocalAuthAdapter
+from src.log import logger
 
 from .config import identity_settings
 from .port import AuthPort
@@ -10,6 +12,15 @@ class LocalProviderNotAllowedError(RuntimeError):
     (D2): the code it accepts isn't backed by anything a stranger
     couldn't also send, so it must never be reachable outside a
     developer's own machine."""
+
+
+class MissingCredentialsError(RuntimeError):
+    """Raised when the active identity provider requires credentials from
+    an external system and they aren't configured (D6, identity-provider
+    spec). Evaluated only for the provider that's actually selected: a
+    provider that isn't active never blocks startup over credentials
+    nothing is going to use.
+    """
 
 
 def build_auth_port() -> AuthPort:
@@ -23,6 +34,24 @@ def build_auth_port() -> AuthPort:
                 "the 'local' identity provider only works when ENVIRONMENT=development"
             )
         return LocalAuthAdapter()
+    if identity_settings.identity_provider == "google":
+        missing = [
+            name
+            for name, value in (
+                ("GOOGLE_CLIENT_ID", identity_settings.google_client_id),
+                ("GOOGLE_CLIENT_SECRET", identity_settings.google_client_secret),
+            )
+            if not value
+        ]
+        if missing:
+            raise MissingCredentialsError(
+                f"the 'google' identity provider requires: {', '.join(missing)}"
+            )
+        # Our own redirect address, that Google's console needs to have
+        # declared identically (D5): logged where it can be compared by
+        # eye instead of deduced from the code.
+        logger.info(f"Google OAuth redirect URI: {google_redirect_uri()}")
+        return GoogleAuthAdapter()
     raise AssertionError(f"unhandled identity provider {identity_settings.identity_provider!r}")
 
 

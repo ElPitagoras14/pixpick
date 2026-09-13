@@ -62,9 +62,18 @@ Both modes read the same `.env` and the same variable names (see the comments in
 
 ### Signing in
 
-`IDENTITY_PROVIDER` selects which identity provider the backend authenticates people against. The only value this project supports so far is `local`: a credential-less sign-in screen the backend itself serves, so the rest of the app -- and anyone developing against it -- never needs real OAuth credentials. Click "Continue" on the login page, type any email on the screen that follows, and you're signed in as that person.
+`IDENTITY_PROVIDER` selects which identity provider the backend authenticates people against: `local` or `google`.
 
-The `local` provider only works when `ENVIRONMENT=development`: the code it accepts isn't backed by anything a stranger couldn't also send, so the backend refuses to start with `IDENTITY_PROVIDER=local` under any other `ENVIRONMENT`, naming the reason in the startup error instead of silently exposing it.
+`local` is a credential-less sign-in screen the backend itself serves, so the rest of the app -- and anyone developing against it -- never needs real OAuth credentials. Click "Continue" on the login page, type any email on the screen that follows, and you're signed in as that person. It only works when `ENVIRONMENT=development`: the code it accepts isn't backed by anything a stranger couldn't also send, so the backend refuses to start with `IDENTITY_PROVIDER=local` under any other `ENVIRONMENT`, naming the reason in the startup error instead of silently exposing it. Development stays on `local` even once `google` is configured elsewhere -- it's not something to switch to just to click through the real consent screen.
+
+`google` signs people in with the Google account they already have -- the difference, for someone who only opened an album's share link, between rating it and closing the tab. Setting it up:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), create an OAuth client ID of type "Web application".
+2. Add an authorized redirect URI of `<PUBLIC_URL>/api/auth/google/callback` -- for example `http://localhost:8080/api/auth/google/callback` against this project's own default `PUBLIC_URL`. It has to match **exactly** what the backend builds from `PUBLIC_URL`; a mismatch comes back as an error from Google itself, not from this app, and the backend logs the address it's using at startup so the two can be compared instead of guessed at.
+3. Configure the consent screen with the three minimal scopes: `openid`, `email`, `profile`. The console labels each scope's own sensitivity when you add it; confirming all three show as "non-sensitive" is what confirms the app doesn't need to go through Google's verification process (see below).
+4. Copy the client ID and client secret the console issues into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and set `IDENTITY_PROVIDER=google`.
+
+Because the scopes above are the minimal, non-sensitive ones, the app can be used without submitting it to Google's verification review -- that review exists for apps that request sensitive or restricted scopes, which this one never does. If Google ever required it anyway, the fallback isn't to rush a review but to keep the app in testing mode with people added explicitly as test users: enough for sharing albums among people you know, not for an album shared publicly.
 
 ## Photos: storage and image variants
 
