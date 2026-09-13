@@ -1,4 +1,4 @@
-from src.models import ApiModel
+from .models import ApiModel
 
 
 class ErrorBody(ApiModel):

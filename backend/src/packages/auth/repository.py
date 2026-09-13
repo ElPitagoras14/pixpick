@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_one, write
 from src.identity.port import ExternalIdentity
-from src.packages.auth.schemas import SessionRecord, UserRecord
+
+from .schemas import SessionRecord, UserRecord
 
 
 async def upsert_user(connection: AsyncConnection, identity: ExternalIdentity) -> UserRecord:

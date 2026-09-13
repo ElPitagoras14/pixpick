@@ -9,7 +9,9 @@ from src.config import settings
 from src.database.dependencies import get_connection
 from src.identity.factory import auth_port
 from src.packages.auth import service
-from src.packages.auth.config import (
+from src.responses import Envelope
+
+from .config import (
     AUTH_COOKIE_PATH,
     RETURN_TO_COOKIE_NAME,
     SESSION_COOKIE_NAME,
@@ -17,13 +19,12 @@ from src.packages.auth.config import (
     STATE_COOKIE_LIFETIME,
     STATE_COOKIE_NAME,
 )
-from src.packages.auth.dependencies import get_current_user
-from src.packages.auth.exceptions import InvalidStateError
-from src.packages.auth.responses import CurrentUserResponse
-from src.packages.auth.return_to import sanitize_return_to
-from src.packages.auth.schemas import UserRecord
-from src.packages.auth.security import generate_state
-from src.responses import Envelope
+from .dependencies import get_current_user
+from .exceptions import InvalidStateError
+from .responses import CurrentUserResponse
+from .return_to import sanitize_return_to
+from .schemas import UserRecord
+from .security import generate_state
 
 router = APIRouter(prefix="/auth")
 

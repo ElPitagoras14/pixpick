@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from src.database.utils import transaction
+from .utils import transaction
 
 
 async def get_connection() -> AsyncIterator[AsyncConnection]:

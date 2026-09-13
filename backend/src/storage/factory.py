@@ -1,6 +1,7 @@
 from src.storage.adapters.minio import MinioStorageAdapter
-from src.storage.config import storage_settings
-from src.storage.port import StoragePort
+
+from .config import storage_settings
+from .port import StoragePort
 
 
 def build_storage_port() -> StoragePort:

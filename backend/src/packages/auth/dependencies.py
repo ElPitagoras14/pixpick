@@ -3,9 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.dependencies import get_connection
 from src.exceptions import UnauthenticatedError
-from src.packages.auth.config import SESSION_COOKIE_NAME
-from src.packages.auth.schemas import UserRecord
-from src.packages.auth.service import resolve_session
+
+from .config import SESSION_COOKIE_NAME
+from .schemas import UserRecord
+from .service import resolve_session
 
 
 async def get_current_user(

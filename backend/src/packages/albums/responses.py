@@ -3,8 +3,9 @@ from uuid import UUID
 from src.images.factory import image_port
 from src.images.port import Variant
 from src.models import ApiModel
-from src.packages.albums.schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
 from src.storage.port import object_key
+
+from .schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
 
 
 class AlbumResponse(ApiModel):

@@ -1,7 +1,8 @@
 from src.config import settings
 from src.identity.adapters.local import LocalAuthAdapter
-from src.identity.config import identity_settings
-from src.identity.port import AuthPort
+
+from .config import identity_settings
+from .port import AuthPort
 
 
 class LocalProviderNotAllowedError(RuntimeError):

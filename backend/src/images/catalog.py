@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from src.images.port import Variant
+from .port import Variant
 
 # Every variant's output format (D11): WebP wins over a more modern format
 # on every one of the three, because the codec's cost falls exactly where

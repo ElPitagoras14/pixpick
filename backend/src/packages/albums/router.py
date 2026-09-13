@@ -7,12 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from src.database.dependencies import get_connection
 from src.models import ApiModel
 from src.packages.albums import service
-from src.packages.albums.dependencies import get_accessible_album
-from src.packages.albums.responses import AlbumDetailResponse, AlbumResponse, AlbumSummaryResponse
-from src.packages.albums.schemas import AlbumDetailRow
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
 from src.responses import Envelope
+
+from .dependencies import get_accessible_album
+from .responses import AlbumDetailResponse, AlbumResponse, AlbumSummaryResponse
+from .schemas import AlbumDetailRow
 
 router = APIRouter(prefix="/albums")
 

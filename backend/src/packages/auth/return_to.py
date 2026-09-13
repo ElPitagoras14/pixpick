@@ -1,6 +1,6 @@
 from urllib.parse import urlsplit
 
-from src.packages.auth.config import DEFAULT_RETURN_TO
+from .config import DEFAULT_RETURN_TO
 
 
 def sanitize_return_to(value: str | None) -> str:

@@ -1,6 +1,7 @@
 from src.images.adapters.imgproxy import ImgproxyAdapter
-from src.images.config import images_settings
-from src.images.port import ImagePort
+
+from .config import images_settings
+from .port import ImagePort
 
 
 def build_image_port() -> ImagePort:

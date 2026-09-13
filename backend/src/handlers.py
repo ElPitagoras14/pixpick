@@ -5,7 +5,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.exceptions import (
+from src.identity.exceptions import InvalidCodeError
+from src.packages.auth.exceptions import InvalidStateError
+
+from .exceptions import (
     DatabaseError,
     ForbiddenError,
     NotFoundError,
@@ -13,10 +16,8 @@ from src.exceptions import (
     UnauthenticatedError,
     ValidationFailedError,
 )
-from src.identity.exceptions import InvalidCodeError
-from src.log import logger
-from src.packages.auth.exceptions import InvalidStateError
-from src.responses import error_envelope
+from .log import logger
+from .responses import error_envelope
 
 
 async def _database_error_handler(request: Request, exc: DatabaseError) -> JSONResponse:

@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from src.health import router as health_router
 from src.identity.config import identity_settings
 from src.packages.albums.router import router as albums_router
 from src.packages.auth.router import router as auth_router
@@ -8,6 +7,8 @@ from src.packages.photos.router import router as photos_router
 from src.packages.ratings.router import router as ratings_router
 from src.packages.shares.router import enter_router as shares_enter_router
 from src.packages.shares.router import router as shares_router
+
+from .health import router as health_router
 
 # The browser and the backend see the exact same path: nginx proxies
 # `/api` without rewriting it (D2), so the prefix lives here instead of

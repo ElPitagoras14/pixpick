@@ -3,8 +3,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
-from src.database.config import database_settings
 from src.exceptions import DatabaseUnavailableError, QueryExecutionError
+
+from .config import database_settings
 
 # Explicit pool limits (D2, D11): five permanent connections and fifteen of
 # overflow, a ceiling of twenty per process. Not left to the access layer's

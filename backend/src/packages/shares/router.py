@@ -7,8 +7,9 @@ from src.packages.albums.schemas import AlbumRecord
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
 from src.packages.shares import service
-from src.packages.shares.responses import EnterShareResponse, ShareLinkResponse
 from src.responses import Envelope
+
+from .responses import EnterShareResponse, ShareLinkResponse
 
 # Administering the link: generating, regenerating, revoking. Owner-only
 # (album-sharing spec) -- `get_owned_album` raises `ForbiddenError` for a
