@@ -1,3 +1,15 @@
+# This file's own four images (migrate, backend, frontend, nginx) are
+# each declared with `image: ghcr.io/...`, not `build:` -- this is the
+# file a deployment pulls published images with, never one that builds
+# from source. compose.dev.yaml is where `build:` lives for each of the
+# four, overriding the image declared here for local development; add
+# `--build` to `docker compose up` after a source change so the override
+# actually rebuilds instead of reusing a stale local image.
+#
+# No workflow publishes these tags to GHCR yet -- `ghcr.io/elpitagoras14/
+# pixpick-*:latest` doesn't exist there today, so this file alone (without
+# compose.dev.yaml's own `build:` override) can't start any of the four
+# until one does.
 services:
   postgres:
     image: postgres:18.6
@@ -23,8 +35,7 @@ services:
   # being written by hand (D7). Bakes the pinned dbmate version and the
   # project's migrations into its image -- see dbmate/Dockerfile.
   migrate:
-    build:
-      context: ./dbmate
+    image: ghcr.io/elpitagoras14/pixpick-migrate:latest
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     command: ["--no-dump-schema", "migrate"]
@@ -35,8 +46,7 @@ services:
       - pixpick
 
   backend:
-    build:
-      context: ./backend
+    image: ghcr.io/elpitagoras14/pixpick-backend:latest
     environment:
       ENVIRONMENT: ${ENVIRONMENT}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -63,8 +73,7 @@ services:
       - pixpick
 
   frontend:
-    build:
-      context: ./frontend
+    image: ghcr.io/elpitagoras14/pixpick-frontend:latest
     environment:
       ENVIRONMENT: ${ENVIRONMENT}
       API_BASE_URL: ${API_BASE_URL}
@@ -142,8 +151,7 @@ services:
   # platform's own proxy reaches them over this network instead (D7).
   # compose.dev.yaml is what opens ports on a developer's machine.
   nginx:
-    build:
-      context: ./nginx
+    image: ghcr.io/elpitagoras14/pixpick-nginx:latest
     volumes:
       # The images cache (D12 in add-media-ports-and-local-adapters): a
       # volume, not an anonymous layer, so it survives a container
