@@ -10,6 +10,7 @@ import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 from src.database.dependencies import get_connection
@@ -113,6 +114,67 @@ def test_engine() -> AsyncEngine:
     # A pool of its own, much smaller than the app's (D11): the suite runs
     # one test at a time and has no reason to reserve twenty connections.
     return create_async_engine(url, pool_size=2, max_overflow=3)
+
+
+@pytest.fixture(autouse=True)
+def _point_the_default_engine_at_the_test_database(test_engine, monkeypatch):
+    """A handful of services open their own transaction through
+    `database.utils.transaction()` instead of the per-request connection
+    (D6 in add-albums-and-upload: deleting a photo's object is a network
+    call, and a transaction that deletes its row SHALL fully commit --
+    releasing its pooled connection -- before that call, never hold it
+    open across the wait). Called with no explicit engine, as production
+    always calls it, that helper defaults to `database.client.engine`;
+    this points the same name at the test database for the duration of
+    every test, so that default is never the developer's own.
+    """
+    monkeypatch.setattr("src.database.client.engine", test_engine)
+
+
+@pytest.fixture
+def fake_storage(monkeypatch):
+    """Swaps the real storage adapter for the in-memory double in both
+    packages that call it, so albums/photos tests never need MinIO up.
+    The contract suite (`tests/storage/`) is what verifies the fake
+    behaves like the real thing (D9, D10) -- these tests only rely on
+    that already being true.
+
+    Also stubs out the warm-up task: a photo the fake storage marks
+    available has no real object behind it, so warming its variant would
+    only mean a real, slow round trip to nginx/imgproxy for something
+    guaranteed to 404. `tests/packages/photos/test_upload_integration.py`
+    is what actually exercises warming against the real stack (task 4.3).
+    """
+    from tests.fakes import FakeStoragePort
+
+    fake = FakeStoragePort()
+    monkeypatch.setattr("src.packages.albums.service.storage_port", fake)
+    monkeypatch.setattr("src.packages.photos.service.storage_port", fake)
+    monkeypatch.setattr("src.packages.photos.reconcile.storage_port", fake)
+
+    async def _no_op_warm_up(object_keys):
+        return None
+
+    monkeypatch.setattr("src.packages.photos.router.warm_up_variants", _no_op_warm_up)
+    return fake
+
+
+@pytest_asyncio.fixture
+async def committed_connection(test_engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
+    """A connection that commits for real against the test database,
+    unlike `connection` above. Only the tests that exercise a flow
+    spanning more than one transaction need this: setting up data through
+    the rollback-only `connection` keeps it invisible to a service's own,
+    separately opened transaction, which a real commit here does not.
+
+    Callers commit explicitly after each step that must become visible to
+    that other transaction (`await connection.commit()`); teardown wipes
+    every table `users` cascades to, so nothing leaks into another test.
+    """
+    async with test_engine.connect() as connection:
+        yield connection
+    async with test_engine.begin() as cleanup:
+        await cleanup.execute(text("delete from users"))
 
 
 @pytest_asyncio.fixture

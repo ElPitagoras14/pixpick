@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
 	createFileRoute,
+	Link,
 	Outlet,
 	redirect,
 	useRouter,
@@ -46,6 +47,15 @@ function AppLayout() {
 	return (
 		<div className="flex min-h-dvh flex-col">
 			<header className="flex items-center justify-between gap-4 border-b p-4">
+				<nav className="flex items-center gap-4">
+					<Link
+						to="/albums"
+						className="text-sm font-semibold"
+						activeProps={{ className: "underline" }}
+					>
+						Albums
+					</Link>
+				</nav>
 				<div className="flex items-center gap-2">
 					<Avatar>
 						{/* The provider's own address, used as-is (D10): not

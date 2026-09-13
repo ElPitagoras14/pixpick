@@ -1,7 +1,7 @@
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from src.database.client import fetch_one, fetch_val, write
+from src.database.client import fetch_one, fetch_val, fetch_val_or_none, write
 from src.exceptions import QueryExecutionError
 
 
@@ -61,3 +61,15 @@ async def test_fetch_one_fails_at_the_boundary_when_a_declared_field_is_missing(
 
     with pytest.raises(ValidationError):
         await fetch_one(connection, "select id from t_model_mismatch", RowWithMissingField)
+
+
+async def test_fetch_val_or_none_is_none_when_nothing_matches(connection):
+    """Added by add-albums-and-upload: unlike `fetch_val`, a query that
+    legitimately matches nothing (an id looked up by a filter that
+    misses) SHALL answer `None` instead of raising."""
+    await write(connection, "create temporary table t_val_or_none (id int primary key)")
+
+    assert await fetch_val_or_none(connection, "select id from t_val_or_none where id = 1") is None
+
+    await write(connection, "insert into t_val_or_none (id) values (1)")
+    assert await fetch_val_or_none(connection, "select id from t_val_or_none where id = 1") == 1

@@ -47,3 +47,20 @@ class ValidationFailedError(Exception):
         self.field = field
         self.message = message
         super().__init__(f"{field}: {message}")
+
+
+class StateConflictError(Exception):
+    """Raised when a well-formed request cannot proceed because of the
+    state of the resource it targets -- never because of what was sent
+    (api-conventions spec, added by add-albums-and-upload for the
+    album-full case). Always answered with 409, which is what tells a
+    client this apart from a validation failure (422): the fix is to
+    change the resource's state and retry the same request unmodified,
+    not to correct the request.
+    """
+
+    def __init__(self, code: str, message: str, *, details: dict | None = None) -> None:
+        self.code = code
+        self.message = message
+        self.details = details
+        super().__init__(f"{code}: {message}")

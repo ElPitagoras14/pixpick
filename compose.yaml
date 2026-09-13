@@ -53,6 +53,7 @@ services:
       IMAGE_PROVIDER: ${IMAGE_PROVIDER}
       IMAGE_SIGNING_KEY: ${IMAGE_SIGNING_KEY}
       IMAGE_SIGNING_SALT: ${IMAGE_SIGNING_SALT}
+      ALBUM_MAX_PHOTOS: ${ALBUM_MAX_PHOTOS}
     depends_on:
       migrate:
         condition: service_completed_successfully
