@@ -50,7 +50,7 @@ class ImgproxyAdapter:
         # second variable that would just have to be kept in sync with it:
         # the transformer and the storage adapter must agree on where
         # originals live, so there's exactly one place that says so.
-        source = f"s3://{storage_settings.storage_bucket}/{object_key}"
+        source = f"s3://{storage_settings.minio_bucket}/{object_key}"
         encoded_source = _b64url(source.encode())
         path = f"/{_processing_options(variant)}/{encoded_source}.{FORMAT}"
         signature = _sign(path)

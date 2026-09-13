@@ -20,17 +20,16 @@ def test_granting_an_upload_emits_no_network_request(monkeypatch):
         album_id="album-1",
         photo_id="photo-1",
         content_type="image/jpeg",
-        max_size=1_000,
         ttl_seconds=60,
     )
 
     assert grant.object_key == object_key(album_id="album-1", photo_id="photo-1")
-    assert "Content-Type" in grant.fields
+    assert grant.headers["Content-Type"] == "image/jpeg"
 
 
 async def test_an_unreachable_storage_surfaces_as_a_domain_error(monkeypatch):
     monkeypatch.setattr(
-        "src.storage.config.storage_settings.storage_server_endpoint", "http://localhost:1"
+        "src.storage.config.storage_settings.minio_server_endpoint", "http://localhost:1"
     )
     adapter = MinioStorageAdapter()
 

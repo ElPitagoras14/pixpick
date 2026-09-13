@@ -20,7 +20,6 @@ async def test_a_granted_upload_can_be_queried_back(storage_harness):
         album_id=album_id,
         photo_id=photo_id,
         content_type="image/jpeg",
-        max_size=1_000_000,
         ttl_seconds=60,
     )
     assert grant.object_key == object_key(album_id=album_id, photo_id=photo_id)
@@ -40,7 +39,6 @@ async def test_an_absent_object_is_distinguished_from_an_empty_one(storage_harne
         album_id=album_id,
         photo_id=photo_id,
         content_type="image/jpeg",
-        max_size=1_000_000,
         ttl_seconds=60,
     )
 
@@ -54,29 +52,12 @@ async def test_an_absent_object_is_distinguished_from_an_empty_one(storage_harne
     assert empty.size == 0
 
 
-async def test_the_size_limit_is_enforced_by_the_storage_itself(storage_harness):
-    album_id, photo_id = _domain_ids()
-    max_size = 1_000
-    grant = storage_harness.port.grant_upload(
-        album_id=album_id,
-        photo_id=photo_id,
-        content_type="image/jpeg",
-        max_size=max_size,
-        ttl_seconds=60,
-    )
-
-    status = storage_harness.upload(grant, size=max_size + 1)
-    assert status >= 300
-    assert await storage_harness.port.get_object(object_key=grant.object_key) is None
-
-
 async def test_an_expired_grant_no_longer_authorizes_the_write(storage_harness):
     album_id, photo_id = _domain_ids()
     grant = storage_harness.port.grant_upload(
         album_id=album_id,
         photo_id=photo_id,
         content_type="image/jpeg",
-        max_size=1_000_000,
         ttl_seconds=1,
     )
     await asyncio.sleep(2)
@@ -91,7 +72,6 @@ async def test_a_grant_does_not_authorize_writing_a_different_object(storage_har
         album_id=album_id,
         photo_id=photo_id,
         content_type="image/jpeg",
-        max_size=1_000_000,
         ttl_seconds=60,
     )
     other_key = object_key(album_id=album_id, photo_id=str(uuid.uuid4()))
@@ -113,7 +93,6 @@ async def test_several_objects_are_deleted_in_one_operation(storage_harness):
             album_id=album_id,
             photo_id=photo_id,
             content_type="image/jpeg",
-            max_size=1_000_000,
             ttl_seconds=60,
         )
         storage_harness.upload(grant, size=10)

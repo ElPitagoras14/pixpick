@@ -21,7 +21,7 @@ pixpick/
 | `backend`        | FastAPI API, mounted under `/api`                                      | No -- only through `nginx`                          |
 | `frontend`       | Builds the SPA once; serves it and receives its config at container start | No -- only through `nginx`                       |
 | `postgres`       | Database                                                               | Yes -- `POSTGRES_PORT` (so a DB client can inspect it) |
-| `storage`        | Object storage (MinIO). The browser writes to it directly              | Yes -- `STORAGE_PORT` (the browser writes to it directly) |
+| `storage`        | Object storage (MinIO). The browser writes to it directly              | Yes -- `MINIO_PORT` (the browser writes to it directly) |
 | `storage-init`   | Runs once, creates the storage's bucket, then exits                    | No                                                   |
 | `transformer`    | Image transformer (imgproxy). Reads originals from `storage` on its own | No -- only through `nginx`, never directly          |
 
@@ -56,7 +56,7 @@ pnpm install
 pnpm dev                          # http://localhost:3000, proxies /api and /images to the backend and nginx
 ```
 
-Both modes read the same `.env` and the same variable names (see the comments in `.env.example`); only which process serves the backend and the frontend changes, plus the values of `STORAGE_SERVER_ENDPOINT` (native mode reaches the storage by its published host port; containers mode reaches it by its service name, like `DATABASE_URL` above). Open `http://localhost:3000` in this mode -- the frontend dev server keeps a single origin by proxying `/api` to the backend itself and `/images` to nginx (the transformer is never reachable directly, in either mode), the same way `nginx` does in the container mode above.
+Both modes read the same `.env` and the same variable names (see the comments in `.env.example`); only which process serves the backend and the frontend changes, plus the value of `MINIO_SERVER_ENDPOINT` (native mode reaches MinIO by its published host port; containers mode reaches it by its service name, like `DATABASE_URL` above). Open `http://localhost:3000` in this mode -- the frontend dev server keeps a single origin by proxying `/api` to the backend itself and `/images` to nginx (the transformer is never reachable directly, in either mode), the same way `nginx` does in the container mode above.
 
 `PUBLIC_URL` is the one exception to "same `.env`, same values" above, and only in native mode: signing in builds its final redirect from `PUBLIC_URL` rather than from the request's own host (deliberately -- see `auth.router.callback`), so it has to be overridden to the frontend dev server's own address for that redirect to land somewhere that's actually serving the app. Left at `.env`'s own value (nginx's address, `http://localhost:8080`), the browser lands there right after signing in and gets a gateway error, since native mode's whole point is that nothing is listening for it there.
 
@@ -77,7 +77,7 @@ Because the scopes above are the minimal, non-sensitive ones, the app can be use
 
 ## Photos: storage and image variants
 
-Uploads go straight from the browser to the object storage (`storage`, MinIO in local development) -- the backend only issues a signed grant for a single object, and never sees the file's bytes (`backend/src/storage/`). `STORAGE_PROVIDER` selects which storage provider is active; `local` is the only value so far.
+Uploads go straight from the browser to the object storage -- the backend only issues a signed grant for a single object, and never sees the file's bytes (`backend/src/storage/`). `STORAGE_PROVIDER` selects which storage provider is active: `local` (MinIO, running in this compose) or `r2` (Cloudflare R2, see "Cloud provider set" below).
 
 Every image is delivered as one of three fixed, named variants -- never as the original, and never with a caller-chosen size:
 
@@ -87,11 +87,11 @@ Every image is delivered as one of three fixed, named variants -- never as the o
 | `rating`    | The swipe/rating card               | Fits within 1080x1080, never cropped                  |
 | `viewer`    | The full-screen viewer              | Fits within 2048x2048, never cropped                  |
 
-All three are WebP, and none ever enlarges an original that's smaller than the variant. The full definition of each -- size, quality, and crop behavior -- lives in exactly one place: `backend/src/images/catalog.py`. `IMAGE_PROVIDER` selects which transformer provider builds their addresses; `local` (imgproxy, running as the `transformer` service) is the only value so far.
+All three are WebP, and none ever enlarges an original that's smaller than the variant. The full definition of each -- size, quality, and crop behavior -- lives in exactly one place: `backend/src/images/catalog.py`, translated to each provider's own vocabulary by its adapter (`backend/src/images/adapters/`) -- the catalog itself never changes with the provider. `IMAGE_PROVIDER` selects which transformer provider builds their addresses: `local` (imgproxy, running as the `transformer` service) or `imagekit` (see "Cloud provider set" below).
 
-A variant's address encodes its own definition (its size, quality and format all appear, signed, in the URL itself). That's why changing anything in the catalog invalidates the cache **by itself**: the changed variant gets a new address, so nginx's cache -- which keys purely on the requested address -- simply never serves the old definition again, and the previous address just ages out on its own. Nothing needs to be cleared and the transformer needs no restart.
+A variant's address encodes its own definition (its size, quality and format all appear, signed, in the URL itself). That's why changing anything in the catalog invalidates the cache **by itself**: the changed variant gets a new address, so the cache in front of it -- nginx locally, ImageKit's own CDN in cloud mode -- simply never serves the old definition again, and the previous address just ages out on its own. Nothing needs to be cleared and the transformer needs no restart.
 
-`nginx` (`nginx/nginx.conf`) is what actually caches produced variants, keyed by their full address, bounded to 2 GB and 30 days of inactivity; it also keeps serving an already-produced variant if the transformer goes down. Neither the storage nor the transformer are reachable directly from the browser (except the storage's uploads, which need their own origin, see `STORAGE_ALLOWED_ORIGINS` in `.env.example`) -- every delivered image goes through `nginx`.
+In local mode, `nginx` (`nginx/nginx.conf`) is what actually caches produced variants, keyed by their full address, bounded to 2 GB and 30 days of inactivity; it also keeps serving an already-produced variant if the transformer goes down. Neither the storage nor the transformer are reachable directly from the browser (except the storage's uploads, which need their own origin, see `MINIO_ALLOWED_ORIGINS` in `.env.example`) -- every delivered image goes through `nginx`. In cloud mode, ImageKit's own CDN is what serves and caches a variant; `nginx`'s own `/images` route stays in place unused (D5 in `add-media-ports-and-local-adapters`) rather than becoming conditional.
 
 To inspect what's actually in the local storage, run the `mc` CLI against it (same image and credentials `storage-init` uses; swap them in if you changed `.env`'s defaults):
 
@@ -102,6 +102,41 @@ docker run --rm --network pixpick_pixpick --entrypoint sh \
     mc ls --recursive local/pixpick
   '
 ```
+
+### Cloud provider set
+
+`local` (MinIO, imgproxy) is for development. The cloud provider set -- Cloudflare R2 for storage, ImageKit for image transformation -- is for when other people are actually looking at the photos: R2 charges nothing for outbound traffic, and ImageKit is itself a CDN, so someone far from the server gets their photos from a point near them instead.
+
+`STORAGE_PROVIDER` and `IMAGE_PROVIDER` are independent, so mixing them -- R2 with imgproxy, or MinIO with ImageKit -- is a valid combination, not just the two pairings above. **A self-hosted MinIO can't stay purely private on the VPS in either case**, though: the browser writes to the storage directly, from wherever the person using the app actually is, never from inside the VPS's own network (object-storage spec) -- true regardless of which transformer is active, imgproxy included. Pairing MinIO with ImageKit adds a second reason: unlike imgproxy, which shares the compose's private network with MinIO, ImageKit runs on a third party's own infrastructure and has to reach MinIO over the public internet to read originals. `MINIO_ALLOWED_ORIGINS` doesn't change this -- it's a browser-only check (which origins may write via CORS), never a network-level one, so it neither grants ImageKit access nor was ever what MinIO's public exposure was for.
+
+**Setting up R2:**
+
+1. Cloudflare dashboard -> Storage & databases -> R2 -> create a bucket.
+2. In the bucket's Settings -> CORS policy, add a policy allowing the origins that need to upload directly (the same ones `MINIO_ALLOWED_ORIGINS` names), methods `PUT`, `GET`, `HEAD`.
+3. R2 -> Manage API Tokens -> create a token scoped to this bucket with "Object Read & Write" permission. Copy the Access Key ID, Secret Access Key, and note the Account ID (it's part of the endpoint: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`).
+
+**Setting up ImageKit:**
+
+1. Create an account at imagekit.io and note its URL Endpoint (`https://ik.imagekit.io/<your_id>`) and Private Key.
+2. Add a custom origin pointed at the R2 bucket above, using the same credentials from step 3 above -- ImageKit reads originals from it directly, the same way imgproxy reads from MinIO locally.
+3. Enable "restrict unsigned URLs" for that origin: every variant address this project builds is already signed (`backend/src/images/adapters/imagekit.py`), and this is what makes ImageKit actually enforce it.
+
+**Configuration:** MinIO and R2 keep entirely separate variables -- `MINIO_*` and `R2_*` (D9 in `add-cloud-media-adapters`) -- so filling in R2's group never touches MinIO's, and the reverse. Fill in `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` from the token, `R2_BUCKET` with the bucket's name, and `R2_ENDPOINT` with the R2 endpoint (a single address -- R2 is public from every side, D7 in `add-cloud-media-adapters`); do the same for `IMAGEKIT_URL_ENDPOINT`/`IMAGEKIT_PRIVATE_KEY`. Only then set `STORAGE_PROVIDER=r2` and `IMAGE_PROVIDER=imagekit` to actually make them the active pair -- at least one group has to be filled in to match whichever value these two name. Also switch `POSTGRES_DB` (and `DATABASE_URL`) to a different database name -- see "Provider sets have their own database" below -- and, when running in containers mode, clear `COMPOSE_PROFILES` so `storage`/`storage-init`/`transformer` don't start for nothing.
+
+**Provider sets have their own database.** The execution mode (containers or native) only changes which host reaches Postgres; the provider set changes which database holds the data (D4 in `add-cloud-media-adapters`). Alternating between `local` and the cloud set during development, each with its own `POSTGRES_DB`, finds its own albums, photos and ratings intact every time -- neither one resets or hides the other's.
+
+**Changing the active storage provider on an environment that already has data** is copy, check, switch, in that exact order -- never switch first:
+
+1. Copy every object from the current provider to the destination, using each provider's own tools (this project's code deliberately never does this move).
+2. Run the migration check against the destination -- it builds a port from that provider's own group of settings (`MINIO_*` or `R2_*`), regardless of which one `STORAGE_PROVIDER` currently names, so the environment keeps serving from the current provider the whole time:
+   ```bash
+   cd backend
+   uv run python -m src.packages.photos.reconcile --against r2
+   ```
+   This lists every object the destination is still missing. Repeat the copy and this check until it reports none.
+3. Only then change `STORAGE_PROVIDER` (and redeploy or restart). An object's name never depends on the provider it's stored in (object-storage spec), so once the copy is verified complete, every existing reference resolves against the new provider without touching a single row.
+
+Rolling back is setting `STORAGE_PROVIDER` back to its previous value -- safe for as long as the previous provider's content still exists, so don't delete it until the new one has been in real use, not just checked.
 
 ## Albums and uploads
 
@@ -123,6 +158,8 @@ An upload grant expires after a while. If the file behind it is never actually u
 cd backend
 uv run python -m src.packages.photos.reconcile
 ```
+
+The same command also runs the migration check `--against` a named provider instead of this cleanup -- see "Cloud provider set" above.
 
 ## Sharing and rating
 
@@ -153,8 +190,9 @@ The owner additionally sees, for every photo, how many people approved it and ho
 | Validation / config  | [Pydantic](https://docs.pydantic.dev/) + [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
 | Logging              | [loguru](https://github.com/Delgan/loguru)     |
 | Security             | [bcrypt](https://pypi.org/project/bcrypt/) (password hashing) |
-| Object storage client | [boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html) (S3-compatible protocol; used by the storage adapter) |
+| Object storage client | [boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html) (S3-compatible protocol; used by the storage adapters) |
 | Environment config   | [python-dotenv](https://pypi.org/project/python-dotenv/) |
+| CLI                   | [Typer](https://typer.tiangolo.com/) (the reconciliation/migration-check command) |
 | Lint / format         | [Ruff](https://docs.astral.sh/ruff/)           |
 
 ### Database migrations (`dbmate/`)
@@ -186,7 +224,7 @@ uv sync
 uv run pytest
 ```
 
-The storage and image-delivery contract suites (`backend/tests/storage/`, `backend/tests/images/`) run against the real `storage`/`transformer`/`nginx` services above, not only against the in-memory doubles -- that's why those need to already be up too, the same expectation the suite already has of Postgres.
+The storage and image-delivery contract suites (`backend/tests/storage/`, `backend/tests/images/`) run against the real `storage`/`transformer`/`nginx` services above, not only against the in-memory doubles -- that's why those need to already be up too, the same expectation the suite already has of Postgres. The storage suite's real-provider run always targets whichever one `STORAGE_PROVIDER` currently names (D3 in `add-cloud-media-adapters`); switch it to `r2` (with `R2_*` filled in) and run it again to exercise that adapter instead.
 
 Runs against the same Postgres the dev environment uses, on a separate `<POSTGRES_DB>_test` database (`pixpick_test` by default) that the suite creates and migrates itself, with the pinned dbmate version above, the first time it runs. No other setup, and no manual cleanup between runs.
 

@@ -43,6 +43,8 @@ Ninguna. Este change agrega implementaciones de comportamientos que ya están es
 - `image-delivery`: se le agrega un requirement que hasta ahora no tenía sentido escribir, porque había un solo transformador. Con dos, hace falta decir que **una variante produce un resultado equivalente sea cual sea el proveedor activo**: el mismo nombre tiene que dar una imagen con las mismas medidas y el mismo formato, o cambiar de proveedor rompería la presentación sin que nada lo señale. Ese requirement es el que convierte al catálogo unificado de variantes en una exigencia y no en una preferencia de implementación.
 - `object-storage`: se le agrega que **el nombre de un objeto no depende del proveedor y que cambiar de proveedor es copiar contenido**. Es una propiedad que el esquema de nombres ya tenía por construcción, pero que nadie había declarado como garantía, y es la que hace que la migración sea una copia en lugar de una transformación de datos. Junto con ella se exige poder comprobar qué objetos faltan en el destino **antes** de cambiar el proveedor activo, usando la operación de consulta que el puerto ya ofrece.
 
+  Además se corrige, por un hallazgo hecho al implementar (D9): el proveedor cloud elegido no soporta la operación de subida que el puerto asumía (POST presignado con un rango de tamaño), así que la concesión pasa a describir un PUT y el límite de tamaño deja de imponerlo el almacenamiento al recibir -- pasa a verificarlo la aplicación al confirmar, contra el tamaño real del objeto. El adapter local migra a la misma operación, para que los dos proveedores sigan compartiendo exactamente el mismo mecanismo.
+
 Las dos capabilities se materializan al archivar `add-media-ports-and-local-adapters`, así que estos deltas asumen que los changes se archivan en el orden en que fueron planificados.
 
 ## Impact
@@ -55,6 +57,8 @@ Las dos capabilities se materializan al archivar `add-media-ports-and-local-adap
 
 **Archivos modificados**
 
+- `backend/src/storage/port.py`: `UploadGrant` pasa de describir un formulario POST a describir un PUT con sus encabezados (D9), y `grant_upload` deja de recibir un tope de tamaño que ningún proveedor puede honrar en la firma.
+- `backend/src/storage/adapters/minio.py` y el frontend (`uploadQueue.ts`): migran a la misma operación PUT, por la misma razón (D9).
 - `backend/src/storage/factory.py` y `config.py`, y sus equivalentes de imágenes: registro de los adapters y sus credenciales.
 - `.env.example`: credenciales y direcciones de los dos proveedores, en el perfil correspondiente.
 - `compose.yaml` y `compose.dev.yaml`: los servicios locales de almacenamiento y transformación dejan de hacer falta cuando los proveedores activos son los cloud, aunque se conserven para el modo local.
@@ -62,7 +66,7 @@ Las dos capabilities se materializan al archivar `add-media-ports-and-local-adap
 
 **Dependencias**
 
-**Ninguna nueva.** El adapter de almacenamiento reutiliza el cliente que ya existe, porque el proveedor habla el mismo protocolo. Y firmar las direcciones del transformador cloud es un cálculo criptográfico que la biblioteca estándar del lenguaje ya provee, así que tampoco hace falta traer nada para eso.
+El adapter de almacenamiento reutiliza el cliente que ya existe, porque el proveedor habla el mismo protocolo. Y firmar las direcciones del transformador cloud es un cálculo criptográfico que la biblioteca estándar del lenguaje ya provee, así que tampoco hace falta traer nada para eso. La única dependencia nueva es `typer`, para el CLI del comando de reconciliación extendido (D6, D9): ya estaba resuelta de forma transitiva (la trae `fastapi[standard]`), así que declararla como dependencia directa no cambia sustancialmente el lockfile.
 
 **Configuración fuera del repositorio**
 

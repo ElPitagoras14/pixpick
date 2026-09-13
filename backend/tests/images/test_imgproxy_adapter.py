@@ -33,7 +33,7 @@ def test_the_address_encodes_the_bucket_and_object_key():
     adapter = ImgproxyAdapter()
     url = adapter.variant_url(object_key="albums/a/p", variant=Variant.THUMBNAIL)
 
-    assert _decode_source(url) == f"s3://{storage_settings.storage_bucket}/albums/a/p"
+    assert _decode_source(url) == f"s3://{storage_settings.minio_bucket}/albums/a/p"
 
 
 def test_the_address_is_stable_for_the_same_input():

@@ -273,7 +273,6 @@ async def test_confirming_a_mismatched_object_is_rejected_and_the_object_is_dele
         album_id=str(album.id),
         photo_id=str(photo.id),
         content_type="image/jpeg",
-        max_size=10_000,
         ttl_seconds=60,
     )
     # A real size different from the 1000 declared -- a mismatch.
@@ -311,7 +310,6 @@ async def test_confirming_a_matching_object_becomes_available_with_the_real_size
         album_id=str(album.id),
         photo_id=str(photo.id),
         content_type="image/jpeg",
-        max_size=10_000,
         ttl_seconds=60,
     )
     fake_storage.upload(target_key=key, size=42, content_type="image/jpeg")
@@ -408,7 +406,6 @@ async def test_deleting_a_photo_removes_it_and_its_object(
         album_id=str(album.id),
         photo_id=str(photo.id),
         content_type="image/jpeg",
-        max_size=10,
         ttl_seconds=60,
     )
     fake_storage.upload(target_key=key, size=10, content_type="image/jpeg")

@@ -182,18 +182,22 @@ async def delete_owned_photo(
     return deleted_id is not None
 
 
-class _ExpiredPhotoRow(BaseModel):
+class _PhotoKey(BaseModel):
+    """Just enough to derive an object key (`storage.port.object_key`) --
+    shared by every query in this module that only needs to name an
+    object, never the photo's other columns."""
+
     id: UUID
     album_id: UUID
 
 
-async def expired_pending_photo_ids(connection: AsyncConnection) -> list[_ExpiredPhotoRow]:
+async def expired_pending_photo_ids(connection: AsyncConnection) -> list[_PhotoKey]:
     """What reconciliation discards (D8): rows still not available whose
     grant has already expired -- an upload that will never complete."""
     return await fetch_all(
         connection,
         "select id, album_id from photos where not available and upload_expires_at <= now()",
-        _ExpiredPhotoRow,
+        _PhotoKey,
     )
 
 
@@ -203,3 +207,13 @@ async def delete_photos_by_id(connection: AsyncConnection, *, photo_ids: list[UU
     await write(
         connection, "delete from photos where id = any(:photo_ids)", {"photo_ids": photo_ids}
     )
+
+
+async def all_available_photo_keys(connection: AsyncConnection) -> list[_PhotoKey]:
+    """Every photo whose object is expected to exist, across every album
+    (object-storage spec, D6 in add-cloud-media-adapters): what a
+    provider migration has to have copied before the active provider
+    changes. A pending upload has no confirmed object yet -- it's not
+    this query's concern, reconciliation's own cleanup already handles
+    it separately."""
+    return await fetch_all(connection, "select id, album_id from available_photos", _PhotoKey)

@@ -23,7 +23,7 @@ export interface PhotoGrant {
 	photoId: string;
 	position: number;
 	uploadUrl: string;
-	uploadFields: Record<string, string>;
+	uploadHeaders: Record<string, string>;
 }
 
 export type ConfirmationStatus = "available" | "rejected" | "pending";

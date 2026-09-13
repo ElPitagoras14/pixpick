@@ -12,24 +12,37 @@ class StorageSettings(BaseSettings):
 
     # Extended with each provider this project adds. An unrecognized value
     # fails startup naming the accepted ones (object-storage spec) instead
-    # of surfacing on the first upload attempt.
-    storage_provider: Literal["local"]
+    # of surfacing on the first upload attempt. Everything below is
+    # grouped by provider and optional here -- only the group the active
+    # value names is required, enforced by the factory (same shape as
+    # `identity`'s own credentials) rather than by these types, since a
+    # `Literal` field can't say "required only for one value".
+    storage_provider: Literal["local", "r2"]
 
-    storage_bucket: str
+    # MinIO's own admin/root credentials, used for local development only
+    # -- the same relationship POSTGRES_USER/PASSWORD have with Postgres,
+    # since there's no separate scoped user in local mode.
+    minio_access_key_id: str | None = None
+    minio_secret_access_key: str | None = None
+    minio_bucket: str | None = None
 
-    # Two addresses for the same storage (D4): the one the browser can
-    # reach, used to sign upload grants, and the one the server reaches,
-    # used to query and delete objects. They coincide once a cloud
-    # provider is public from both sides, but not in this local setup.
-    storage_browser_endpoint: str
-    storage_server_endpoint: str
+    # Two addresses for the same storage (D4 in
+    # add-media-ports-and-local-adapters): the one the browser can reach,
+    # used to sign upload grants, and the one the server reaches, used to
+    # query and delete objects -- genuinely two values for MinIO, unlike
+    # R2 below (D7 in add-cloud-media-adapters).
+    minio_browser_endpoint: str | None = None
+    minio_server_endpoint: str | None = None
 
-    # The storage's own admin/root credentials, reused directly as the
-    # access/secret key pair (there's no separate scoped user in local
-    # mode) -- the same relationship POSTGRES_USER/PASSWORD have with
-    # Postgres.
-    storage_root_user: str
-    storage_root_password: str
+    # An R2 API token's key pair, scoped to this project's bucket.
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket: str | None = None
+
+    # A single address, not two (D7): R2 is public from every side, so
+    # the browser and the server reach it the same way -- one field says
+    # so directly, instead of two that would always have to agree.
+    r2_endpoint: str | None = None
 
 
 storage_settings = StorageSettings()  # type: ignore[call-arg]

@@ -18,7 +18,7 @@ services:
   # transformer is not published, it is only ever reached through nginx.
   storage:
     ports:
-      - "${STORAGE_PORT}:9000"
+      - "${MINIO_PORT}:9000"
 
   migrate:
     build:

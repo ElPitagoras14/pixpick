@@ -153,7 +153,6 @@ async def test_deleting_an_album_removes_it_and_its_photos_objects(
         album_id=str(album.id),
         photo_id=str(photo.id),
         content_type="image/jpeg",
-        max_size=10,
         ttl_seconds=60,
     )
     fake_storage.upload(target_key=key, size=10, content_type="image/jpeg")

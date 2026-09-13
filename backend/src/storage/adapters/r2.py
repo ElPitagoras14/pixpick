@@ -12,27 +12,40 @@ from src.storage.port import ObjectMetadata, UploadGrant, object_key
 # R2 both require v4.
 _SIGNATURE_VERSION = "s3v4"
 
+# R2 has no regions of its own; this is the literal value its S3 API
+# expects in every request, regardless of where the bucket's data
+# actually lives (Cloudflare's own S3-compatible API docs).
+_REGION = "auto"
 
-def _client(endpoint: str):
+
+def _client():
     return boto3.client(
         "s3",
-        endpoint_url=endpoint,
-        aws_access_key_id=storage_settings.minio_access_key_id,
-        aws_secret_access_key=storage_settings.minio_secret_access_key,
+        endpoint_url=storage_settings.r2_endpoint,
+        region_name=_REGION,
+        aws_access_key_id=storage_settings.r2_access_key_id,
+        aws_secret_access_key=storage_settings.r2_secret_access_key,
         config=Config(signature_version=_SIGNATURE_VERSION),
     )
 
 
-class MinioStorageAdapter:
-    """Talks to MinIO over the S3 protocol (D1). Two clients, not one
+class R2StorageAdapter:
+    """Talks to Cloudflare R2 over the same S3 protocol MinIO speaks
+    (D2, D9 in add-cloud-media-adapters): the only thing that differs
+    from `MinioStorageAdapter` is this client's configuration -- the
+    region R2 expects, and the endpoint and credentials this provider
+    issues -- never the operations themselves. Two clients, not one
     (D4): grants are signed against the address the browser reaches,
-    queries and deletes go through the address the server reaches.
+    queries and deletes go through the address the server reaches --
+    the same single `r2_endpoint` for both in this provider (D7), which
+    is one config field rather than two that would always have to
+    agree, but still two separate client objects.
     """
 
     def __init__(self) -> None:
-        self._browser_client = _client(storage_settings.minio_browser_endpoint)
-        self._server_client = _client(storage_settings.minio_server_endpoint)
-        self._bucket = storage_settings.minio_bucket
+        self._browser_client = _client()
+        self._server_client = _client()
+        self._bucket = storage_settings.r2_bucket
 
     def grant_upload(
         self,
@@ -45,9 +58,9 @@ class MinioStorageAdapter:
         key = object_key(album_id=album_id, photo_id=photo_id)
         try:
             # Pure local signing (D8): no request leaves the process here.
-            # A PUT, not a POST with a policy (D9 in add-cloud-media-adapters):
-            # no presigned URL, on any provider, can bound a size range, so
-            # this signs only the object identity and the content type.
+            # A PUT, not a POST with a policy (D9): R2 doesn't implement
+            # presigned POST at all, and no presigned URL on any provider
+            # can bound a size range the way a POST policy can.
             url = self._browser_client.generate_presigned_url(
                 ClientMethod="put_object",
                 Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},

@@ -1,4 +1,35 @@
+## REMOVED Requirements
+
+### Requirement: La concesión de subida está acotada en objeto, tiempo, tamaño y tipo
+
+Reemplazada por "La concesión de subida está acotada en objeto, tiempo y tipo, y el tamaño se verifica al confirmar" (D9 en este change): ningún esquema de firma por URL puede expresar un rango de tamaño de forma portable entre proveedores, así que esa comprobación deja de ser parte de la concesión.
+
 ## ADDED Requirements
+
+### Requirement: La concesión de subida está acotada en objeto, tiempo y tipo, y el tamaño se verifica al confirmar
+
+Una concesión SHALL habilitar la escritura de un único objeto, SHALL vencer, y SHALL declarar el tipo de contenido admitido. El tamaño declarado SHALL validarse antes de emitir la concesión, y el tamaño real del objeto SHALL verificarse contra lo declarado una vez subido -- ninguna de las dos comprobaciones SHALL depender de que el almacenamiento la imponga al recibir, porque ningún esquema de firma por URL puede expresar un rango de tamaño de forma portable entre proveedores.
+
+#### Scenario: Un tamaño declarado por encima del límite se rechaza antes de conceder
+
+- **WHEN** se pide una concesión para un archivo cuyo tamaño declarado excede el límite
+- **THEN** no se emite la concesión
+
+#### Scenario: Un objeto que no coincide con lo declarado se rechaza al confirmar
+
+- **WHEN** el objeto subido con una concesión válida no coincide en tamaño con lo declarado
+- **THEN** se rechaza al confirmarlo
+- **AND** el objeto se elimina del almacenamiento
+
+#### Scenario: Una concesión vencida ya no habilita
+
+- **WHEN** se intenta usar una concesión cuyo vencimiento pasó
+- **THEN** la escritura se rechaza
+
+#### Scenario: Una concesión no habilita escribir otro objeto
+
+- **WHEN** se intenta usar una concesión para escribir un objeto distinto del que habilitaba
+- **THEN** la escritura se rechaza
 
 ### Requirement: El nombre de un objeto no depende del proveedor, y cambiar de proveedor es copiar contenido
 

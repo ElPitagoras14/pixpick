@@ -16,13 +16,17 @@ def object_key(*, album_id: str, photo_id: str) -> str:
 
 class UploadGrant(BaseModel):
     """What the client applies verbatim to perform the upload, without
-    knowing which provider issued it (object-storage spec). `fields`
-    SHALL be submitted as a multipart form together with the file itself
-    under the "file" field, which SHALL be the last one in the form.
+    knowing which provider issued it (object-storage spec). The client
+    SHALL send a `PUT` to `url` with the file's raw bytes as the body,
+    and SHALL set every header in `headers` exactly as given -- they're
+    signed into `url` itself, so a missing or altered one invalidates
+    the request (D9 in add-cloud-media-adapters: no presigned URL, on
+    any provider, can express a size range the way a POST policy can,
+    which is why this describes a PUT and not a form).
     """
 
     url: str
-    fields: dict[str, str]
+    headers: dict[str, str]
     object_key: str
 
 
@@ -47,11 +51,17 @@ class StoragePort(Protocol):
         album_id: str,
         photo_id: str,
         content_type: str,
-        max_size: int,
         ttl_seconds: int,
     ) -> UploadGrant:
         """Concedes a direct upload for a single object. Pure computation
         -- signing doesn't talk to anyone (D8) -- so this is synchronous.
+
+        Takes no size limit: no presigned URL can bound one (D9 in
+        add-cloud-media-adapters). The size the client declares is
+        validated before this is even called, and the real object's size
+        is verified again once it's confirmed (photo-upload spec) --
+        this operation only ever bounds the object identity, the
+        content type, and how long the grant is good for.
         """
         ...
 

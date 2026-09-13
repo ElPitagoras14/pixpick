@@ -12,7 +12,6 @@ from src.storage.port import ObjectMetadata, UploadGrant, object_key
 @dataclass
 class _PendingGrant:
     object_key: str
-    max_size: int
     expires_at: datetime
 
 
@@ -39,29 +38,28 @@ class FakeStoragePort:
         album_id: str,
         photo_id: str,
         content_type: str,
-        max_size: int,
         ttl_seconds: int,
     ) -> UploadGrant:
         key = object_key(album_id=album_id, photo_id=photo_id)
         self._grants[key] = _PendingGrant(
             object_key=key,
-            max_size=max_size,
             expires_at=datetime.now(UTC) + timedelta(seconds=ttl_seconds),
         )
         # No real endpoint: the fake is never driven through HTTP, only
         # through `upload` below.
-        return UploadGrant(url="fake://upload", fields={}, object_key=key)
+        return UploadGrant(
+            url="fake://upload", headers={"Content-Type": content_type}, object_key=key
+        )
 
     def upload(self, *, target_key: str, size: int, content_type: str) -> bool:
         """Test-only: what a browser writing directly against a grant
         would do. Returns whether the write was accepted, exactly the
         thing a real storage's HTTP response status tells the contract
-        suite.
+        suite. No size check here (D9 in add-cloud-media-adapters): no
+        presigned URL, on any real provider, can bound one either.
         """
         pending = self._grants.get(target_key)
         if pending is None or pending.expires_at < datetime.now(UTC):
-            return False
-        if size > pending.max_size:
             return False
         self._objects[target_key] = _StoredObject(size=size, content_type=content_type)
         return True

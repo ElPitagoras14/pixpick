@@ -103,18 +103,14 @@ async function uploadToStorage(
 	file: File,
 	onProgress: (percent: number) => void,
 ): Promise<void> {
-	const formData = new FormData();
-	for (const [key, value] of Object.entries(grant.uploadFields)) {
-		formData.append(key, value);
-	}
-	// Last, per the storage contract (object-storage spec): the file
-	// field has to follow every other field in the multipart body.
-	formData.append("file", file);
-
 	// Not this app's own `api` client: this goes straight to the storage
 	// provider's own origin, with none of the API's credentials or base
-	// URL (object-storage spec -- the API never sees these bytes).
-	await axios.post(grant.uploadUrl, formData, {
+	// URL (object-storage spec -- the API never sees these bytes). A PUT
+	// with the file itself as the body (D9 in add-cloud-media-adapters):
+	// `uploadHeaders` has to travel exactly as given, since it's signed
+	// into `uploadUrl` -- a missing or altered header invalidates it.
+	await axios.put(grant.uploadUrl, file, {
+		headers: grant.uploadHeaders,
 		onUploadProgress: (event) => {
 			if (event.total) {
 				onProgress(Math.round((event.loaded / event.total) * 100));
