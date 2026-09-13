@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from src.database.dependencies import get_connection
 from src.models import ApiModel
 from src.packages.albums import service
-from src.packages.albums.dependencies import get_owned_album
-from src.packages.albums.responses import AlbumResponse, AlbumSummaryResponse
-from src.packages.albums.schemas import AlbumRecord
+from src.packages.albums.dependencies import get_accessible_album
+from src.packages.albums.responses import AlbumDetailResponse, AlbumResponse, AlbumSummaryResponse
+from src.packages.albums.schemas import AlbumDetailRow
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
 from src.responses import Envelope
@@ -58,13 +58,16 @@ async def list_albums(
     user: UserRecord = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> Envelope[list[AlbumSummaryResponse]]:
-    rows = await service.list_albums(connection, owner_id=user.id)
+    rows = await service.list_albums(connection, user_id=user.id)
     return Envelope(data=[AlbumSummaryResponse.from_row(row) for row in rows])
 
 
 @router.get("/{album_id}")
-async def get_album(album: AlbumRecord = Depends(get_owned_album)) -> Envelope[AlbumResponse]:
-    return Envelope(data=AlbumResponse.from_record(album))
+async def get_album(
+    album: AlbumDetailRow = Depends(get_accessible_album),
+    user: UserRecord = Depends(get_current_user),
+) -> Envelope[AlbumDetailResponse]:
+    return Envelope(data=AlbumDetailResponse.from_row(album, viewer_id=user.id))
 
 
 @router.patch("/{album_id}")
@@ -77,7 +80,7 @@ async def rename_album(
     album = await service.rename_album(
         connection,
         album_id=album_id,
-        owner_id=user.id,
+        user_id=user.id,
         title=body.title,
         description=body.description,
     )
@@ -93,5 +96,5 @@ async def delete_album(
     # deletes its photos' objects, a network call that SHALL happen only
     # once the row deletion has already committed (D6) -- see
     # `service.delete_album`.
-    await service.delete_album(album_id=album_id, owner_id=user.id)
+    await service.delete_album(album_id=album_id, user_id=user.id)
     return Envelope(data=None)

@@ -13,10 +13,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppHomeRouteImport } from './routes/_app/home'
+import { Route as ATokenRouteImport } from './routes/a.$token'
 import { Route as AppAlbumsIndexRouteImport } from './routes/_app/albums/index'
 import { Route as AppAlbumsAlbumIdRouteRouteImport } from './routes/_app/albums/$albumId/route'
 import { Route as AppAlbumsNewRouteImport } from './routes/_app/albums/new'
 import { Route as AppAlbumsAlbumIdIndexRouteImport } from './routes/_app/albums/$albumId/index'
+import { Route as AppAlbumsAlbumIdSwipeRouteImport } from './routes/_app/albums/$albumId/swipe'
 import { Route as AppAlbumsAlbumIdUploadRouteImport } from './routes/_app/albums/$albumId/upload'
 
 const IndexRoute = IndexRouteImport.update({
@@ -38,6 +40,11 @@ const AppHomeRoute = AppHomeRouteImport.update({
   path: '/home',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const ATokenRoute = ATokenRouteImport.update({
+  id: '/a/$token',
+  path: '/a/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppAlbumsIndexRoute = AppAlbumsIndexRouteImport.update({
   id: '/albums/',
   path: '/albums/',
@@ -58,6 +65,11 @@ const AppAlbumsAlbumIdIndexRoute = AppAlbumsAlbumIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAlbumsAlbumIdRouteRoute,
 } as any)
+const AppAlbumsAlbumIdSwipeRoute = AppAlbumsAlbumIdSwipeRouteImport.update({
+  id: '/swipe',
+  path: '/swipe',
+  getParentRoute: () => AppAlbumsAlbumIdRouteRoute,
+} as any)
 const AppAlbumsAlbumIdUploadRoute = AppAlbumsAlbumIdUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
@@ -68,9 +80,11 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/home': typeof AppHomeRoute
+  '/a/$token': typeof ATokenRoute
   '/albums/$albumId': typeof AppAlbumsAlbumIdRouteRouteWithChildren
   '/albums/new': typeof AppAlbumsNewRoute
   '/albums/': typeof AppAlbumsIndexRoute
+  '/albums/$albumId/swipe': typeof AppAlbumsAlbumIdSwipeRoute
   '/albums/$albumId/upload': typeof AppAlbumsAlbumIdUploadRoute
   '/albums/$albumId/': typeof AppAlbumsAlbumIdIndexRoute
 }
@@ -78,8 +92,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/home': typeof AppHomeRoute
+  '/a/$token': typeof ATokenRoute
   '/albums/new': typeof AppAlbumsNewRoute
   '/albums': typeof AppAlbumsIndexRoute
+  '/albums/$albumId/swipe': typeof AppAlbumsAlbumIdSwipeRoute
   '/albums/$albumId/upload': typeof AppAlbumsAlbumIdUploadRoute
   '/albums/$albumId': typeof AppAlbumsAlbumIdIndexRoute
 }
@@ -89,9 +105,11 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/home': typeof AppHomeRoute
+  '/a/$token': typeof ATokenRoute
   '/_app/albums/$albumId': typeof AppAlbumsAlbumIdRouteRouteWithChildren
   '/_app/albums/new': typeof AppAlbumsNewRoute
   '/_app/albums/': typeof AppAlbumsIndexRoute
+  '/_app/albums/$albumId/swipe': typeof AppAlbumsAlbumIdSwipeRoute
   '/_app/albums/$albumId/upload': typeof AppAlbumsAlbumIdUploadRoute
   '/_app/albums/$albumId/': typeof AppAlbumsAlbumIdIndexRoute
 }
@@ -101,9 +119,11 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/home'
+    | '/a/$token'
     | '/albums/$albumId'
     | '/albums/new'
     | '/albums/'
+    | '/albums/$albumId/swipe'
     | '/albums/$albumId/upload'
     | '/albums/$albumId/'
   fileRoutesByTo: FileRoutesByTo
@@ -111,8 +131,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/home'
+    | '/a/$token'
     | '/albums/new'
     | '/albums'
+    | '/albums/$albumId/swipe'
     | '/albums/$albumId/upload'
     | '/albums/$albumId'
   id:
@@ -121,9 +143,11 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/home'
+    | '/a/$token'
     | '/_app/albums/$albumId'
     | '/_app/albums/new'
     | '/_app/albums/'
+    | '/_app/albums/$albumId/swipe'
     | '/_app/albums/$albumId/upload'
     | '/_app/albums/$albumId/'
   fileRoutesById: FileRoutesById
@@ -132,6 +156,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ATokenRoute: typeof ATokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -164,6 +189,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHomeRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/a/$token': {
+      id: '/a/$token'
+      path: '/a/$token'
+      fullPath: '/a/$token'
+      preLoaderRoute: typeof ATokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/albums/': {
       id: '/_app/albums/'
       path: '/albums'
@@ -192,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAlbumsAlbumIdIndexRouteImport
       parentRoute: typeof AppAlbumsAlbumIdRouteRoute
     }
+    '/_app/albums/$albumId/swipe': {
+      id: '/_app/albums/$albumId/swipe'
+      path: '/swipe'
+      fullPath: '/albums/$albumId/swipe'
+      preLoaderRoute: typeof AppAlbumsAlbumIdSwipeRouteImport
+      parentRoute: typeof AppAlbumsAlbumIdRouteRoute
+    }
     '/_app/albums/$albumId/upload': {
       id: '/_app/albums/$albumId/upload'
       path: '/upload'
@@ -203,11 +242,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppAlbumsAlbumIdRouteRouteChildren {
+  AppAlbumsAlbumIdSwipeRoute: typeof AppAlbumsAlbumIdSwipeRoute
   AppAlbumsAlbumIdUploadRoute: typeof AppAlbumsAlbumIdUploadRoute
   AppAlbumsAlbumIdIndexRoute: typeof AppAlbumsAlbumIdIndexRoute
 }
 
 const AppAlbumsAlbumIdRouteRouteChildren: AppAlbumsAlbumIdRouteRouteChildren = {
+  AppAlbumsAlbumIdSwipeRoute: AppAlbumsAlbumIdSwipeRoute,
   AppAlbumsAlbumIdUploadRoute: AppAlbumsAlbumIdUploadRoute,
   AppAlbumsAlbumIdIndexRoute: AppAlbumsAlbumIdIndexRoute,
 }
@@ -239,6 +280,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  ATokenRoute: ATokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

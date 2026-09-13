@@ -4,7 +4,13 @@ import pytest
 
 from src.packages.albums import repository
 from tests.authhelpers import log_in
-from tests.factories import create_album, create_photo, create_session, create_user
+from tests.factories import (
+    create_album,
+    create_membership,
+    create_photo,
+    create_session,
+    create_user,
+)
 
 
 async def test_creating_an_album_needs_only_a_title(client, connection):
@@ -36,17 +42,21 @@ async def test_a_blank_title_is_rejected_the_same_way(client, connection):
     assert response.json()["error"]["field"] == "title"
 
 
-async def test_listing_shows_only_the_callers_own_albums(client, connection):
+async def test_listing_shows_the_callers_own_and_shared_albums(client, connection):
     owner = await log_in(client, connection)
     stranger = await create_user(connection)
     await create_album(connection, owner_id=owner.id, title="Mine")
-    await create_album(connection, owner_id=stranger.id, title="Theirs")
+    shared = await create_album(connection, owner_id=stranger.id, title="Shared with me")
+    await create_album(connection, owner_id=stranger.id, title="Not mine at all")
+    await create_membership(connection, album_id=shared.id, user_id=owner.id)
 
     response = client.get("/api/albums")
 
     assert response.status_code == 200
-    titles = [album["title"] for album in response.json()["data"]]
-    assert titles == ["Mine"]
+    by_title = {album["title"]: album for album in response.json()["data"]}
+    assert set(by_title) == {"Mine", "Shared with me"}
+    assert by_title["Mine"]["isOwner"] is True
+    assert by_title["Shared with me"]["isOwner"] is False
 
 
 async def test_the_owner_can_view_their_album(client, connection):
@@ -57,6 +67,19 @@ async def test_the_owner_can_view_their_album(client, connection):
 
     assert response.status_code == 200
     assert response.json()["data"]["title"] == "Mine"
+    assert response.json()["data"]["isOwner"] is True
+
+
+async def test_a_member_can_view_an_album_they_do_not_own(client, connection):
+    owner = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id, title="Shared")
+    member = await log_in(client, connection)
+    await create_membership(connection, album_id=album.id, user_id=member.id)
+
+    response = client.get(f"/api/albums/{album.id}")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["isOwner"] is False
 
 
 async def test_a_foreign_album_responds_like_a_nonexistent_one(client, connection):
@@ -69,6 +92,19 @@ async def test_a_foreign_album_responds_like_a_nonexistent_one(client, connectio
 
     assert foreign_response.status_code == missing_response.status_code == 404
     assert foreign_response.json() == missing_response.json()
+
+
+async def test_a_member_who_is_not_the_owner_cannot_rename_the_album(client, connection):
+    owner = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id, title="Untouched")
+    member = await log_in(client, connection)
+    await create_membership(connection, album_id=album.id, user_id=member.id)
+
+    response = client.patch(f"/api/albums/{album.id}", json={"title": "Hijacked"})
+
+    assert response.status_code == 403
+    unchanged = await repository.get_owned_album(connection, album_id=album.id, owner_id=owner.id)
+    assert unchanged.title == "Untouched"
 
 
 async def test_renaming_updates_title_and_description(client, connection):
@@ -160,6 +196,22 @@ async def test_a_failed_object_deletion_still_leaves_no_dangling_record(
         committed_connection, album_id=album.id, owner_id=owner.id
     )
     assert remaining is None
+
+
+async def test_a_member_who_is_not_the_owner_cannot_delete_the_album(client, committed_connection):
+    owner = await create_user(committed_connection)
+    album = await create_album(committed_connection, owner_id=owner.id)
+    member = await log_in(client, committed_connection)
+    await create_membership(committed_connection, album_id=album.id, user_id=member.id)
+    await committed_connection.commit()
+
+    response = client.delete(f"/api/albums/{album.id}")
+
+    assert response.status_code == 403
+    remaining = await repository.get_owned_album(
+        committed_connection, album_id=album.id, owner_id=owner.id
+    )
+    assert remaining is not None
 
 
 async def test_deleting_a_foreign_album_responds_like_a_nonexistent_one(

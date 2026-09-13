@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.dependencies import get_connection
 from src.models import ApiModel
-from src.packages.albums.dependencies import get_owned_album
-from src.packages.albums.schemas import AlbumRecord
+from src.packages.albums.dependencies import get_accessible_album, get_owned_album
+from src.packages.albums.schemas import AlbumDetailRow, AlbumRecord
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
 from src.packages.photos import service
@@ -53,7 +53,10 @@ class ConfirmPhotosRequest(ApiModel):
 
 @router.get("")
 async def list_photos(
-    album: AlbumRecord = Depends(get_owned_album),
+    # A member can view the grid too, not only the owner (album-management
+    # spec, modified by add-share-and-swipe) -- unlike granting, confirming
+    # or deleting a photo below, which stay owner-only.
+    album: AlbumDetailRow = Depends(get_accessible_album),
     connection: AsyncConnection = Depends(get_connection),
 ) -> Envelope[list[PhotoResponse]]:
     rows = await service.list_photos(connection, album_id=album.id)
@@ -92,7 +95,7 @@ async def confirm_photos(
     # SHALL NOT happen while any transaction sits open (D6) -- see
     # `service.confirm_batch`.
     results, warm_up_keys = await service.confirm_batch(
-        album_id=album_id, owner_id=user.id, photo_ids=body.photo_ids
+        album_id=album_id, user_id=user.id, photo_ids=body.photo_ids
     )
     if warm_up_keys:
         # After responding, never before (D7, task 4.5): scheduled here
@@ -109,5 +112,5 @@ async def delete_photo(
     user: UserRecord = Depends(get_current_user),
 ) -> Envelope[None]:
     # Deliberately not `Depends(get_connection)`: see `service.delete_photo`.
-    await service.delete_photo(album_id=album_id, owner_id=user.id, photo_id=photo_id)
+    await service.delete_photo(album_id=album_id, user_id=user.id, photo_id=photo_id)
     return Envelope(data=None)

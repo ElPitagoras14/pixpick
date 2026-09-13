@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import event
 
 from src.packages.albums import repository
-from tests.factories import create_album, create_photo, create_user
+from tests.factories import create_album, create_membership, create_photo, create_user
 
 
 async def test_insert_album_assigns_the_creator_as_owner(connection):
@@ -42,7 +42,7 @@ async def test_get_owned_album_is_none_for_a_nonexistent_album(connection):
     )
 
 
-async def test_list_owned_albums_resolves_count_and_cover_in_one_query(connection):
+async def test_list_member_albums_resolves_count_cover_and_pending_in_one_query(connection):
     user = await create_user(connection)
     await create_album(connection, owner_id=user.id, title="Empty")
     populated_album = await create_album(connection, owner_id=user.id, title="Populated")
@@ -58,7 +58,7 @@ async def test_list_owned_albums_resolves_count_and_cover_in_one_query(connectio
 
     event.listen(connection.sync_engine, "before_cursor_execute", _count_queries)
     try:
-        rows = await repository.list_owned_albums(connection, owner_id=user.id)
+        rows = await repository.list_member_albums(connection, user_id=user.id)
     finally:
         event.remove(connection.sync_engine, "before_cursor_execute", _count_queries)
 
@@ -67,21 +67,87 @@ async def test_list_owned_albums_resolves_count_and_cover_in_one_query(connectio
     by_title = {row.title: row for row in rows}
     assert by_title["Empty"].photo_count == 0
     assert by_title["Empty"].cover_photo_id is None
+    assert by_title["Empty"].is_owner is True
+    # Nothing rated yet: both available photos of "Populated" are pending.
+    assert by_title["Populated"].pending_count == 2
     # Only the two available photos count; the unavailable one is
     # invisible to the count and never the cover (D1, photo-upload spec).
     assert by_title["Populated"].photo_count == 2
     assert by_title["Populated"].cover_photo_id == first_photo.id
 
 
-async def test_list_owned_albums_only_returns_the_owners_own(connection):
+async def test_list_member_albums_only_returns_albums_the_caller_is_a_member_of(connection):
     owner = await create_user(connection)
     stranger = await create_user(connection)
     await create_album(connection, owner_id=owner.id, title="Mine")
     await create_album(connection, owner_id=stranger.id, title="Theirs")
 
-    rows = await repository.list_owned_albums(connection, owner_id=owner.id)
+    rows = await repository.list_member_albums(connection, user_id=owner.id)
 
     assert [row.title for row in rows] == ["Mine"]
+
+
+async def test_list_member_albums_includes_shared_albums_distinguished_from_owned(connection):
+    owner = await create_user(connection)
+    member = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id, title="Shared")
+    await create_membership(connection, album_id=album.id, user_id=member.id)
+
+    owner_rows = await repository.list_member_albums(connection, user_id=owner.id)
+    member_rows = await repository.list_member_albums(connection, user_id=member.id)
+
+    assert owner_rows[0].is_owner is True
+    assert member_rows[0].is_owner is False
+
+
+async def test_get_accessible_album_is_none_for_someone_with_no_relation_to_it(connection):
+    owner = await create_user(connection)
+    stranger = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    assert (
+        await repository.get_accessible_album(connection, album_id=album.id, user_id=owner.id)
+        is not None
+    )
+    assert (
+        await repository.get_accessible_album(connection, album_id=album.id, user_id=stranger.id)
+        is None
+    )
+
+
+async def test_get_accessible_album_sees_a_member_who_is_not_the_owner(connection):
+    owner = await create_user(connection)
+    member = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id)
+    await create_membership(connection, album_id=album.id, user_id=member.id)
+
+    accessible = await repository.get_accessible_album(
+        connection, album_id=album.id, user_id=member.id
+    )
+
+    assert accessible is not None
+    assert accessible.owner_id == owner.id
+
+
+async def test_add_member_is_idempotent(connection):
+    owner = await create_user(connection)
+    member = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    await repository.add_member(connection, album_id=album.id, user_id=member.id)
+    await repository.add_member(connection, album_id=album.id, user_id=member.id)
+
+    rows = await repository.list_member_albums(connection, user_id=member.id)
+    assert len(rows) == 1
+
+
+async def test_is_member(connection):
+    owner = await create_user(connection)
+    stranger = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    assert await repository.is_member(connection, album_id=album.id, user_id=owner.id) is True
+    assert await repository.is_member(connection, album_id=album.id, user_id=stranger.id) is False
 
 
 async def test_rename_owned_album_updates_only_title_and_description(connection):
@@ -97,7 +163,7 @@ async def test_rename_owned_album_updates_only_title_and_description(connection)
     assert updated.title == "New"
     assert updated.description == "New desc"
 
-    rows = await repository.list_owned_albums(connection, owner_id=user.id)
+    rows = await repository.list_member_albums(connection, user_id=user.id)
     assert rows[0].cover_photo_id == photo.id
 
 

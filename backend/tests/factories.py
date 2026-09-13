@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from src.database.client import fetch_one, fetch_val
+from src.database.client import fetch_one, fetch_val, write
 from src.packages.auth.security import hash_session_token
 
 DEFAULT_SESSION_LIFETIME = timedelta(days=30)
@@ -31,6 +31,14 @@ class AlbumRow(BaseModel):
 
 
 class PhotoRow(BaseModel):
+    id: UUID
+
+
+class ShareTokenRow(BaseModel):
+    id: UUID
+
+
+class RatingRow(BaseModel):
     id: UUID
 
 
@@ -103,6 +111,11 @@ async def create_album(
     title: str = "Test Album",
     description: str | None = None,
 ) -> AlbumRow:
+    """Also makes `owner_id` a member (album-sharing spec: creating an
+    album does this in production too), so a test that only cares about
+    ownership never has to declare the membership its own invariants
+    already assume.
+    """
     row = await fetch_one(
         connection,
         """
@@ -114,6 +127,7 @@ async def create_album(
         {"owner_id": owner_id, "title": title, "description": description},
     )
     assert row is not None
+    await create_membership(connection, album_id=row.id, user_id=owner_id)
     return row
 
 
@@ -169,6 +183,66 @@ async def create_photo(
             "height": height,
             "upload_expires_at": upload_expires_at,
         },
+    )
+    assert row is not None
+    return row
+
+
+async def create_share_token(
+    connection: AsyncConnection,
+    *,
+    album_id: UUID,
+    token: str | None = None,
+    revoked_at: datetime | None = None,
+) -> tuple[ShareTokenRow, str]:
+    """Returns the created row alongside the raw token, mirroring
+    `create_session` -- unlike a session token, this one is stored in
+    plain text (see the migration's own comment on `share_tokens`), but a
+    test still gets it back this way for symmetry with the rest of this
+    module and so it never has to know the storage detail either.
+    """
+    token = token or secrets.token_urlsafe(32)
+    row = await fetch_one(
+        connection,
+        """
+        insert into share_tokens (album_id, token, revoked_at)
+        values (:album_id, :token, :revoked_at)
+        returning id
+        """,
+        ShareTokenRow,
+        {"album_id": album_id, "token": token, "revoked_at": revoked_at},
+    )
+    assert row is not None
+    return row, token
+
+
+async def create_membership(connection: AsyncConnection, *, album_id: UUID, user_id: UUID) -> None:
+    """Idempotent, like the repository function it mirrors (album-sharing
+    spec): declaring the same membership twice in a test's setup is
+    harmless."""
+    await write(
+        connection,
+        """
+        insert into album_members (album_id, user_id)
+        values (:album_id, :user_id)
+        on conflict (album_id, user_id) do nothing
+        """,
+        {"album_id": album_id, "user_id": user_id},
+    )
+
+
+async def create_rating(
+    connection: AsyncConnection, *, photo_id: UUID, user_id: UUID, approved: bool = True
+) -> RatingRow:
+    row = await fetch_one(
+        connection,
+        """
+        insert into photo_ratings (photo_id, user_id, approved)
+        values (:photo_id, :user_id, :approved)
+        returning id
+        """,
+        RatingRow,
+        {"photo_id": photo_id, "user_id": user_id, "approved": approved},
     )
     assert row is not None
     return row

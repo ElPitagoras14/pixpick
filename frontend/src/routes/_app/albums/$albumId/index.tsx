@@ -12,7 +12,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { useDeleteAlbum } from "@/features/albums/api";
+import { albumQueryOptions, useDeleteAlbum } from "@/features/albums/api";
 import {
 	type Photo,
 	photosQueryOptions,
@@ -28,6 +28,9 @@ export const Route = createFileRoute("/_app/albums/$albumId/")({
 function AlbumGrid() {
 	const { albumId } = Route.useParams();
 	const navigate = useNavigate();
+	// Already loaded by the layout's own loader (D11): reading it here again
+	// is a cache hit, never a second request.
+	const { data: album } = useSuspenseQuery(albumQueryOptions(albumId));
 	const { data: photos } = useSuspenseQuery(photosQueryOptions(albumId));
 	const deleteAlbum = useDeleteAlbum();
 	const [confirmingDeleteAlbum, setConfirmingDeleteAlbum] = useState(false);
@@ -37,15 +40,17 @@ function AlbumGrid() {
 
 	return (
 		<div>
-			<div className="mb-4 flex justify-end">
-				<Button
-					variant="destructive"
-					size="sm"
-					onClick={() => setConfirmingDeleteAlbum(true)}
-				>
-					Delete album
-				</Button>
-			</div>
+			{album.isOwner && (
+				<div className="mb-4 flex justify-end">
+					<Button
+						variant="destructive"
+						size="sm"
+						onClick={() => setConfirmingDeleteAlbum(true)}
+					>
+						Delete album
+					</Button>
+				</div>
+			)}
 
 			{photos.length === 0 ? (
 				<p className="text-muted-foreground py-12 text-center text-sm">
@@ -74,14 +79,16 @@ function AlbumGrid() {
 									className="size-full object-cover"
 								/>
 							</div>
-							<button
-								type="button"
-								onClick={() => setPhotoPendingDelete(photo)}
-								className="bg-background/80 absolute top-1.5 right-1.5 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100"
-							>
-								<Trash2Icon className="size-4" />
-								<span className="sr-only">Delete photo</span>
-							</button>
+							{album.isOwner && (
+								<button
+									type="button"
+									onClick={() => setPhotoPendingDelete(photo)}
+									className="bg-background/80 absolute top-1.5 right-1.5 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100"
+								>
+									<Trash2Icon className="size-4" />
+									<span className="sr-only">Delete photo</span>
+								</button>
+							)}
 						</li>
 					))}
 				</ul>

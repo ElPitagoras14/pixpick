@@ -10,14 +10,18 @@ export interface AlbumSummary {
 	id: string;
 	title: string;
 	description: string | null;
+	isOwner: boolean;
 	photoCount: number;
 	coverUrl: string | null;
+	pendingCount: number;
 }
 
 export interface Album {
 	id: string;
 	title: string;
 	description: string | null;
+	isOwner: boolean;
+	pendingCount: number;
 }
 
 async function fetchAlbums(): Promise<AlbumSummary[]> {
@@ -52,10 +56,23 @@ export interface AlbumInput {
 	description?: string;
 }
 
-async function createAlbum(input: AlbumInput): Promise<Album> {
+// What create/rename return (album-management spec): the album's own
+// descriptive fields, never `isOwner`/`pendingCount` -- those depend on
+// who's asking and what they've rated, which only the detail endpoint
+// (`fetchAlbum`) resolves.
+export interface AlbumEditResult {
+	id: string;
+	title: string;
+	description: string | null;
+}
+
+async function createAlbum(input: AlbumInput): Promise<AlbumEditResult> {
 	try {
-		const response = await api.post<ApiEnvelope<Album>>("/albums", input);
-		return response.data.data as Album;
+		const response = await api.post<ApiEnvelope<AlbumEditResult>>(
+			"/albums",
+			input,
+		);
+		return response.data.data as AlbumEditResult;
 	} catch (error) {
 		unwrapApiError(error);
 	}
@@ -76,13 +93,13 @@ export function useCreateAlbum() {
 async function renameAlbum({
 	albumId,
 	...body
-}: AlbumInput & { albumId: string }): Promise<Album> {
+}: AlbumInput & { albumId: string }): Promise<AlbumEditResult> {
 	try {
-		const response = await api.patch<ApiEnvelope<Album>>(
+		const response = await api.patch<ApiEnvelope<AlbumEditResult>>(
 			`/albums/${albumId}`,
 			body,
 		);
-		return response.data.data as Album;
+		return response.data.data as AlbumEditResult;
 	} catch (error) {
 		unwrapApiError(error);
 	}
@@ -96,7 +113,12 @@ export function useRenameAlbum() {
 			queryClient.invalidateQueries({
 				queryKey: albumsQueryOptions().queryKey,
 			});
-			queryClient.setQueryData(albumQueryOptions(album.id).queryKey, album);
+			// Not `setQueryData`: the rename response doesn't carry
+			// `isOwner`/`pendingCount`, so caching it verbatim would erase
+			// them from whatever the detail query already held.
+			queryClient.invalidateQueries({
+				queryKey: albumQueryOptions(album.id).queryKey,
+			});
 		},
 	});
 }
