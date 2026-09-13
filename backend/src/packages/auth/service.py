@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.identity.port import ExternalIdentity
 from src.packages.auth import repository
-from src.packages.auth.config import SESSION_LIFETIME
-from src.packages.auth.schemas import UserRecord
-from src.packages.auth.security import generate_session_token, hash_session_token
+
+from .config import SESSION_LIFETIME
+from .schemas import UserRecord
+from .security import generate_session_token, hash_session_token
 
 
 async def complete_login(

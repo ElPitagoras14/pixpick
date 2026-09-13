@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 
 from src.database.client import check_connectivity
-from src.models import ApiModel
-from src.responses import Envelope
+
+from .models import ApiModel
+from .responses import Envelope
 
 router = APIRouter()
 

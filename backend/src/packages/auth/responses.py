@@ -1,7 +1,8 @@
 from uuid import UUID
 
 from src.models import ApiModel
-from src.packages.auth.schemas import UserRecord
+
+from .schemas import UserRecord
 
 
 class CurrentUserResponse(ApiModel):

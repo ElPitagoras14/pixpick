@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_all, fetch_one, fetch_val, fetch_val_or_none, write
-from src.packages.albums.schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
+
+from .schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
 
 
 async def insert_album(

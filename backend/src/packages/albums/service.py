@@ -5,9 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from src.database.utils import transaction
 from src.exceptions import ForbiddenError, NotFoundError
 from src.packages.albums import repository
-from src.packages.albums.schemas import AlbumListRow, AlbumRecord
 from src.storage.factory import storage_port
 from src.storage.port import object_key
+
+from .schemas import AlbumListRow, AlbumRecord
 
 
 async def create_album(

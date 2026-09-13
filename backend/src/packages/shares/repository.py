@@ -3,7 +3,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_one, fetch_val_or_none, write
-from src.packages.shares.schemas import ShareTokenRecord
+
+from .schemas import ShareTokenRecord
 
 
 async def get_live_token(connection: AsyncConnection, *, album_id: UUID) -> ShareTokenRecord | None:
