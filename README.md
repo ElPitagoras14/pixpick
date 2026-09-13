@@ -38,7 +38,7 @@ Open `http://localhost:${NGINX_PORT}` (`8080` by default). That single command b
 
 To stop everything (keeping the database volume): `docker compose -f compose.yaml -f compose.dev.yaml down`. Add `-v` to also drop the Postgres data.
 
-The `backend` service has no dev-only override: it builds from `backend/Dockerfile` the same way in every environment for now, so picking up a backend code change in container mode means rebuilding it (`docker compose -f compose.yaml -f compose.dev.yaml up --build backend`), not just editing and reloading.
+`compose.yaml` names its own four images (`migrate`, `backend`, `frontend`, `nginx`) as `ghcr.io/elpitagoras14/pixpick-*:latest` -- what a real deployment would pull, once something publishes them there, which nothing does yet. `compose.dev.yaml` is what builds each one from its own Dockerfile instead, tagging the result with that same name rather than pulling it; the two files together are what every command on this page uses, and picking up a code change in container mode means rebuilding (`docker compose -f compose.yaml -f compose.dev.yaml up --build backend`), not just editing and reloading.
 
 ### Native mode
 
@@ -49,7 +49,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d postgres migrate storag
 
 cd backend
 uv sync
-uv run uvicorn src.main:app --reload --loop src.loop:loop_factory   # http://localhost:8000
+PUBLIC_URL=http://localhost:3000 uv run python -m src.main   # http://localhost:8000, reloads on change since ENVIRONMENT=development
 
 cd frontend
 pnpm install
@@ -57,6 +57,8 @@ pnpm dev                          # http://localhost:3000, proxies /api and /ima
 ```
 
 Both modes read the same `.env` and the same variable names (see the comments in `.env.example`); only which process serves the backend and the frontend changes, plus the values of `STORAGE_SERVER_ENDPOINT` (native mode reaches the storage by its published host port; containers mode reaches it by its service name, like `DATABASE_URL` above). Open `http://localhost:3000` in this mode -- the frontend dev server keeps a single origin by proxying `/api` to the backend itself and `/images` to nginx (the transformer is never reachable directly, in either mode), the same way `nginx` does in the container mode above.
+
+`PUBLIC_URL` is the one exception to "same `.env`, same values" above, and only in native mode: signing in builds its final redirect from `PUBLIC_URL` rather than from the request's own host (deliberately -- see `auth.router.callback`), so it has to be overridden to the frontend dev server's own address for that redirect to land somewhere that's actually serving the app. Left at `.env`'s own value (nginx's address, `http://localhost:8080`), the browser lands there right after signing in and gets a gateway error, since native mode's whole point is that nothing is listening for it there.
 
 ### Signing in
 
@@ -102,6 +104,8 @@ Uploading is two steps, neither of which ever sends the file's bytes through the
 | ------- | ---------------- |
 | `ALBUM_MAX_PHOTOS` | The most photos a single album admits (default `50`). A product constraint on the swipe-to-rate interaction, not a storage quota. |
 
+The albums list separates what's yours from what's been shared with you into two groups, each showing how many albums it holds. Which group is selected lives in the page's own address, so reloading it, or sharing a link to it, keeps showing the same one.
+
 `ALBUM_MAX_PHOTOS` only conditions *adding* photos: lowering it never removes a photo from an album that already exceeds it, and that album stays exactly as readable and usable as any other -- the only thing that stops working is granting it more. Raising it back, or freeing space by deleting a few photos, is all it takes to add again.
 
 An upload grant expires after a while. If the file behind it is never actually uploaded, the photo stays invisible forever and is harmless on its own, but its row and (if the upload partially landed) its object still take up space. Run the reconciliation command whenever it's convenient -- there's no schedule that runs it automatically, on purpose (nothing it cleans up is observable until then):
@@ -119,7 +123,15 @@ Regenerating the link revokes the current one and issues a new one in the same s
 
 Rating is a swipe: drag the card right to approve, left to reject, or use the on-screen buttons or the arrow keys -- the gesture is a shortcut, never the only way to complete a sequence. The deck shows exactly the album's available photos a person hasn't rated yet, in the album's own order; there's no separate "finished" flag anywhere -- what's pending is always the live difference between the album's photos and that person's own ratings, so uploading more photos to an album someone already finished makes those new photos pending for them again, automatically. Rating the same photo twice is harmless: the second one simply replaces the first. The owner rates their own album the same way anyone else does -- creating an album already makes its owner a member of it, with nothing special to set up first.
 
-How many photos are still pending shows up both in the albums list and inside the album itself, for whoever's looking at it -- it's their own count, since two people rating the same album track their progress independently.
+How many photos are still pending shows up in the albums list, inside the album itself, and in the gallery's own "unrated" filter below -- always the same number in all three, for whoever's looking, since it's the same comparison between the album's photos and that person's own ratings, read three different ways.
+
+## Gallery and stats
+
+Opening an album shows its gallery: every available photo, with a small indicator in one corner showing whether the person looking rated it, and how -- not calling it approved or rejected is its own visible state, distinct from either rating. The gallery has four filters -- all, approved, rejected, and still unrated -- each showing its own count without a request of its own, and the selected filter lives in the page's own address, so reloading it, or sharing a filtered link, shows the same view; an unrecognized filter falls back to "all" instead of failing. The "unrated" filter, the swipe sequence, and the album's pending count are the same comparison read three ways, so they can never disagree, and the gallery offers a direct path back into the swipe sequence whenever something is still unrated.
+
+Tapping a photo's indicator changes its rating on the spot, through the very same operation the swipe sequence uses -- editing from the gallery isn't a second way to rate, just another entrance to the one that already exists. A photo that stops matching the active filter doesn't jump out of the grid the instant that happens; it leaves the next time that filter is asked for, so correcting a few photos in a row never feels like the grid is moving under your finger.
+
+The owner additionally sees, for every photo, how many people approved it and how many rejected it, as a compact line under each thumbnail, plus a one-line summary of how many people rated something and how many ratings exist in total, in the gallery's own header. Those counts are a separate resource from the gallery itself -- nobody but the owner can fetch them, and the gallery's own response never carries them either -- computed fresh on every request, never stored, so a new rating or a change of mind shows up the moment it's asked for again.
 
 ## Backend (`backend/`)
 
