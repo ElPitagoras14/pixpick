@@ -25,7 +25,11 @@ function NewAlbum() {
 			{ title, description: description || undefined },
 			{
 				onSuccess: (album) => {
-					navigate({ to: "/albums/$albumId", params: { albumId: album.id } });
+					navigate({
+						to: "/albums/$albumId",
+						params: { albumId: album.id },
+						search: { filter: "all" },
+					});
 				},
 				onError: (error) => {
 					// The field the server names lands on the field itself

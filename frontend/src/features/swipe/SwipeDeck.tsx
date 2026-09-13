@@ -45,7 +45,11 @@ export function SwipeDeck({ albumId, initialPhotos }: SwipeDeckProps) {
 					There's nothing left for you to rate in this album right now.
 				</p>
 				<Button asChild size="sm">
-					<Link to="/albums/$albumId" params={{ albumId }}>
+					<Link
+						to="/albums/$albumId"
+						params={{ albumId }}
+						search={{ filter: "all" }}
+					>
 						View album
 					</Link>
 				</Button>

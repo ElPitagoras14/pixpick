@@ -4,7 +4,26 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_all, fetch_val, fetch_val_or_none, write, write_many
-from src.packages.photos.schemas import AvailablePhotoRow, PhotoRecord
+
+from .schemas import (
+    AvailablePhotoRow,
+    PhotoRecord,
+    PhotoWithRatingRow,
+    RatingFilter,
+)
+
+# The condition each filter adds on top of "available photos of this
+# album, left-joined with this person's own rating" (D1): "all" adds
+# nothing, and the other three each pick one of the three states a
+# rating column can be in. A key not in here is a programming error, not
+# a request to handle leniently -- see `router.get_gallery` for where an
+# unrecognized value from outside is turned into the default instead.
+_RATING_FILTER_CONDITIONS: dict[RatingFilter, str] = {
+    "all": "",
+    "approved": "and r.approved = true",
+    "rejected": "and r.approved = false",
+    "unrated": "and r.approved is null",
+}
 
 
 async def count_occupied_slots(connection: AsyncConnection, *, album_id: UUID) -> int:
@@ -70,6 +89,37 @@ async def list_available_photos(
         """,
         AvailablePhotoRow,
         {"album_id": album_id},
+    )
+
+
+async def list_photos_with_rating(
+    connection: AsyncConnection,
+    *,
+    album_id: UUID,
+    user_id: UUID,
+    rating_filter: RatingFilter = "all",
+) -> list[PhotoWithRatingRow]:
+    """The single query behind the rating sequence, the pending counter
+    and the gallery's four filters (D1, rating-gallery spec): the
+    album's available photos left-joined with the rating -- if any --
+    that `user_id` gave each one, with one condition appended for the
+    requested filter. Implemented once and parameterized instead of once
+    per consumer, so what "pending" or "rejected" means can't drift
+    between the sequence, the counter and the gallery (task 1.1, 1.2).
+    """
+    condition = _RATING_FILTER_CONDITIONS[rating_filter]
+    return await fetch_all(
+        connection,
+        f"""
+        select p.id, p."position", p.width, p.height, r.approved
+        from available_photos p
+        left join photo_ratings r on r.photo_id = p.id and r.user_id = :user_id
+        where p.album_id = :album_id
+        {condition}
+        order by p."position" asc
+        """,
+        PhotoWithRatingRow,
+        {"album_id": album_id, "user_id": user_id},
     )
 
 

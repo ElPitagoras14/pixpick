@@ -1,7 +1,7 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Trash2Icon } from "lucide-react";
 import { useState } from "react";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,34 +14,92 @@ import {
 } from "@/components/ui/dialog";
 import { albumQueryOptions, useDeleteAlbum } from "@/features/albums/api";
 import {
-	type Photo,
-	photosQueryOptions,
-	useDeletePhoto,
-} from "@/features/photos/api";
+	albumStatsQueryOptions,
+	GALLERY_FILTERS,
+	type GalleryFilter,
+	type GalleryPhoto,
+	galleryQueryOptions,
+	useSetRating,
+} from "@/features/gallery/api";
+import { GalleryPhotoCard } from "@/features/gallery/GalleryPhotoCard";
+import { GalleryTabs } from "@/features/gallery/GalleryTabs";
+import { useDeletePhoto } from "@/features/photos/api";
 
-export const Route = createFileRoute("/_app/albums/$albumId/")({
-	loader: ({ context, params }) =>
-		context.queryClient.ensureQueryData(photosQueryOptions(params.albumId)),
-	component: AlbumGrid,
+// A closed set of four values with a default (D9, rating-gallery spec):
+// `.catch` is what turns an unrecognized filter into "all" instead of a
+// validation error, so an old or hand-edited link never breaks.
+const gallerySearchSchema = z.object({
+	filter: z.enum(GALLERY_FILTERS).catch("all"),
 });
 
-function AlbumGrid() {
+export const Route = createFileRoute("/_app/albums/$albumId/")({
+	validateSearch: gallerySearchSchema,
+	loaderDeps: ({ search }) => ({ filter: search.filter }),
+	loader: ({ context, params, deps }) =>
+		context.queryClient.ensureQueryData(
+			galleryQueryOptions(params.albumId, deps.filter),
+		),
+	component: AlbumGallery,
+});
+
+const EMPTY_MESSAGE: Record<GalleryFilter, string> = {
+	all: "No photos yet.",
+	approved: "Nothing approved yet.",
+	rejected: "Nothing rejected yet.",
+	unrated: "Nothing left to rate.",
+};
+
+function AlbumGallery() {
 	const { albumId } = Route.useParams();
+	const { filter } = Route.useSearch();
 	const navigate = useNavigate();
-	// Already loaded by the layout's own loader (D11): reading it here again
-	// is a cache hit, never a second request.
+	// Already loaded by the layout's own loader (D11): reading it here
+	// again is a cache hit, never a second request.
 	const { data: album } = useSuspenseQuery(albumQueryOptions(albumId));
-	const { data: photos } = useSuspenseQuery(photosQueryOptions(albumId));
+	const { data: gallery } = useSuspenseQuery(
+		galleryQueryOptions(albumId, filter),
+	);
+	// Requested alongside the gallery and never awaited before it (D5):
+	// the grid renders as soon as the gallery arrives, and the owner's
+	// counts appear on top of it once the stats arrive separately. Only
+	// mounted for the owner -- for anyone else this resource is forbidden
+	// (album-stats spec), so there is nothing to ask for.
+	const { data: stats } = useQuery({
+		...albumStatsQueryOptions(albumId),
+		enabled: album.isOwner,
+	});
+	const statsByPhotoId = new Map(
+		stats?.photos.map((photo) => [photo.photoId, photo]) ?? [],
+	);
+
+	const setRating = useSetRating(albumId);
 	const deleteAlbum = useDeleteAlbum();
 	const [confirmingDeleteAlbum, setConfirmingDeleteAlbum] = useState(false);
-	const [photoPendingDelete, setPhotoPendingDelete] = useState<Photo | null>(
-		null,
-	);
+	const [photoPendingDelete, setPhotoPendingDelete] =
+		useState<GalleryPhoto | null>(null);
 
 	return (
 		<div>
-			{album.isOwner && (
-				<div className="mb-4 flex justify-end">
+			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+				<div className="flex flex-col gap-1">
+					<GalleryTabs
+						albumId={albumId}
+						active={filter}
+						counts={gallery.counts}
+					/>
+					{/* Only exists for the owner (task 4.3, D8): never shown
+					empty to anyone else, since for them this isn't a zone
+					that failed to load -- it simply isn't there. */}
+					{album.isOwner && stats && (
+						<p className="text-muted-foreground text-xs">
+							{stats.participantCount} participant
+							{stats.participantCount === 1 ? "" : "s"} · {stats.ratingCount}{" "}
+							rating
+							{stats.ratingCount === 1 ? "" : "s"}
+						</p>
+					)}
+				</div>
+				{album.isOwner && (
 					<Button
 						variant="destructive"
 						size="sm"
@@ -49,47 +107,27 @@ function AlbumGrid() {
 					>
 						Delete album
 					</Button>
-				</div>
-			)}
+				)}
+			</div>
 
-			{photos.length === 0 ? (
+			{gallery.photos.length === 0 ? (
 				<p className="text-muted-foreground py-12 text-center text-sm">
-					No photos yet.
+					{EMPTY_MESSAGE[filter]}
 				</p>
 			) : (
 				<ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-					{photos.map((photo) => (
-						<li key={photo.id} className="group relative">
-							{/* The declared dimensions reserve the aspect ratio before
-							the thumbnail loads (task 6.4) -- purely a layout hint
-							(photo-upload spec), never a decision anything depends on. */}
-							<div
-								className="bg-muted overflow-hidden rounded-lg"
-								style={{
-									aspectRatio:
-										photo.width && photo.height
-											? `${photo.width} / ${photo.height}`
-											: "1 / 1",
-								}}
-							>
-								<img
-									src={photo.thumbnailUrl}
-									alt=""
-									loading="lazy"
-									className="size-full object-cover"
-								/>
-							</div>
-							{album.isOwner && (
-								<button
-									type="button"
-									onClick={() => setPhotoPendingDelete(photo)}
-									className="bg-background/80 absolute top-1.5 right-1.5 rounded-md p-1 opacity-0 transition-opacity group-hover:opacity-100"
-								>
-									<Trash2Icon className="size-4" />
-									<span className="sr-only">Delete photo</span>
-								</button>
-							)}
-						</li>
+					{gallery.photos.map((photo) => (
+						<GalleryPhotoCard
+							key={photo.id}
+							photo={photo}
+							stats={album.isOwner ? statsByPhotoId.get(photo.id) : undefined}
+							onSetRating={(approved) =>
+								setRating.mutate({ photoId: photo.id, approved })
+							}
+							onDelete={
+								album.isOwner ? () => setPhotoPendingDelete(photo) : undefined
+							}
+						/>
 					))}
 				</ul>
 			)}
@@ -112,7 +150,8 @@ function AlbumGrid() {
 							disabled={deleteAlbum.isPending}
 							onClick={() =>
 								deleteAlbum.mutate(albumId, {
-									onSuccess: () => navigate({ to: "/albums" }),
+									onSuccess: () =>
+										navigate({ to: "/albums", search: { group: "own" } }),
 								})
 							}
 						>
@@ -137,7 +176,7 @@ function DeletePhotoDialog({
 	onOpenChange,
 }: {
 	albumId: string;
-	photo: Photo | null;
+	photo: GalleryPhoto | null;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const deletePhoto = useDeletePhoto(albumId);

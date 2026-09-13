@@ -3,36 +3,31 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_all, fetch_one, fetch_val
-from src.packages.ratings.schemas import PendingPhotoRow, RatingRecord
+from src.packages.photos import repository as photos_repository
+
+from .schemas import AlbumRatingRow, PendingPhotoRow, RatingRecord
 
 
 async def list_pending_photos(
     connection: AsyncConnection, *, album_id: UUID, user_id: UUID
 ) -> list[PendingPhotoRow]:
-    """The one comparison lo pendiente is (D2, photo-rating spec): the
-    album's available photos that `user_id` hasn't rated yet, in the
-    album's own order. Implemented once and used both for the rating
-    sequence and, by `service.count_pending`, for the counter -- never a
-    second implementation of the same comparison that could drift from
-    this one. Compares against `available_photos` (add-albums-and-upload),
-    so a photo that isn't available yet is never pending for anyone,
-    without this query having to exclude it explicitly.
+    """The one comparison lo pendiente is (D1, D2, photo-rating and
+    rating-gallery specs): the album's available photos that `user_id`
+    hasn't rated yet, in the album's own order. Delegates to the same
+    query the gallery's own "unrated" filter uses, filtered here in SQL
+    rather than fetched whole and filtered in Python -- this endpoint
+    only ever needs the unrated ones, never the other three. Used both
+    for the rating sequence and, by `service.count_pending`, for the
+    counter -- never a second implementation of the same comparison that
+    could drift from this one or from the gallery's.
     """
-    return await fetch_all(
-        connection,
-        """
-        select p.id, p."position", p.width, p.height
-        from available_photos p
-        where p.album_id = :album_id
-          and not exists (
-              select 1 from photo_ratings r
-              where r.photo_id = p.id and r.user_id = :user_id
-          )
-        order by p."position" asc
-        """,
-        PendingPhotoRow,
-        {"album_id": album_id, "user_id": user_id},
+    rows = await photos_repository.list_photos_with_rating(
+        connection, album_id=album_id, user_id=user_id, rating_filter="unrated"
     )
+    return [
+        PendingPhotoRow(id=row.id, position=row.position, width=row.width, height=row.height)
+        for row in rows
+    ]
 
 
 async def photo_is_available_in_album(
@@ -49,6 +44,30 @@ async def photo_is_available_in_album(
         )
         """,
         {"photo_id": photo_id, "album_id": album_id},
+    )
+
+
+async def list_album_ratings(
+    connection: AsyncConnection, *, album_id: UUID
+) -> list[AlbumRatingRow]:
+    """Every rating cast on one of the album's available photos (D3,
+    album-stats spec), one row per person's decision on one photo. Joins
+    against `available_photos` and not `photos` directly, so a rating on
+    a photo whose upload never completed -- which the schema's own
+    cascade never leaves behind anyway -- still couldn't surface here.
+    `service.get_album_stats` builds both the per-photo counts and the
+    album summary from this one query, in a single pass over these rows.
+    """
+    return await fetch_all(
+        connection,
+        """
+        select r.photo_id, r.user_id, r.approved
+        from photo_ratings r
+        join available_photos p on p.id = r.photo_id
+        where p.album_id = :album_id
+        """,
+        AlbumRatingRow,
+        {"album_id": album_id},
     )
 
 

@@ -1,17 +1,52 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
-import { albumsQueryOptions } from "@/features/albums/api";
+import { type AlbumSummary, albumsQueryOptions } from "@/features/albums/api";
+import { cn } from "@/lib/utils";
+
+const ALBUM_GROUPS = ["own", "shared"] as const;
+type AlbumGroup = (typeof ALBUM_GROUPS)[number];
+
+// A closed set with a default (D10, same pattern the gallery's own
+// filter uses): an unrecognized group falls back to "own" instead of
+// producing an error.
+const albumsSearchSchema = z.object({
+	group: z.enum(ALBUM_GROUPS).catch("own"),
+});
 
 export const Route = createFileRoute("/_app/albums/")({
+	validateSearch: albumsSearchSchema,
 	loader: ({ context }) =>
 		context.queryClient.ensureQueryData(albumsQueryOptions()),
 	component: AlbumsList,
 });
 
+const GROUP_LABEL: Record<AlbumGroup, string> = {
+	own: "My albums",
+	shared: "Shared with me",
+};
+
+const EMPTY_GROUP_MESSAGE: Record<AlbumGroup, string> = {
+	own: "You don't have any albums yet.",
+	shared: "No one has shared an album with you yet.",
+};
+
 function AlbumsList() {
 	const { data: albums } = useSuspenseQuery(albumsQueryOptions());
+	const { group } = Route.useSearch();
+
+	// Split here, not with a second request (D10, task 5.2): the list the
+	// server already returned distinguishes owned from shared (D9 in
+	// add-share-and-swipe), so grouping and counting each group are two
+	// array filters over data already in hand, and the backend is
+	// untouched.
+	const groups: Record<AlbumGroup, AlbumSummary[]> = {
+		own: albums.filter((album) => album.isOwner),
+		shared: albums.filter((album) => !album.isOwner),
+	};
+	const visible = groups[group];
 
 	return (
 		<div className="mx-auto max-w-3xl p-6">
@@ -22,22 +57,49 @@ function AlbumsList() {
 				</Button>
 			</div>
 
-			{albums.length === 0 ? (
+			<div className="mb-6 flex gap-1">
+				{ALBUM_GROUPS.map((candidate) => (
+					<Link
+						key={candidate}
+						to="/albums"
+						search={{ group: candidate }}
+						className={cn(
+							"rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+							group === candidate
+								? "bg-primary text-primary-foreground"
+								: "text-muted-foreground hover:bg-muted",
+						)}
+					>
+						{GROUP_LABEL[candidate]}{" "}
+						<span className={group === candidate ? "opacity-80" : "opacity-60"}>
+							{groups[candidate].length}
+						</span>
+					</Link>
+				))}
+			</div>
+
+			{visible.length === 0 ? (
+				// Says what would appear here (task 5.3), so an empty group
+				// never reads like a list still loading -- the suspense
+				// boundary above already handles that state on its own.
 				<div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
 					<p className="text-muted-foreground text-sm">
-						You don't have any albums yet.
+						{EMPTY_GROUP_MESSAGE[group]}
 					</p>
-					<Button asChild size="sm">
-						<Link to="/albums/new">Create your first album</Link>
-					</Button>
+					{group === "own" && (
+						<Button asChild size="sm">
+							<Link to="/albums/new">Create your first album</Link>
+						</Button>
+					)}
 				</div>
 			) : (
 				<ul className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-					{albums.map((album) => (
+					{visible.map((album) => (
 						<li key={album.id}>
 							<Link
 								to="/albums/$albumId"
 								params={{ albumId: album.id }}
+								search={{ filter: "all" }}
 								// `flex h-full flex-col`: a grid row already stretches
 								// each `<li>` to the tallest one, but the link itself
 								// still sized to its own content -- a card with the
@@ -61,8 +123,8 @@ function AlbumsList() {
 								<div className="flex flex-1 flex-col justify-center gap-0.5 p-2">
 									<p className="truncate text-sm font-medium">{album.title}</p>
 									<p className="text-muted-foreground text-xs">
-										{album.photoCount} photo{album.photoCount === 1 ? "" : "s"}
-										{!album.isOwner && " · Shared"}
+										{album.photoCount} photo
+										{album.photoCount === 1 ? "" : "s"}
 									</p>
 									{album.pendingCount > 0 && (
 										<p className="text-xs font-medium text-primary">

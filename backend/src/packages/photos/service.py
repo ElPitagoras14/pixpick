@@ -8,15 +8,23 @@ from src.exceptions import NotFoundError, StateConflictError, ValidationFailedEr
 from src.packages.albums import repository as albums_repository
 from src.packages.albums import service as albums_service
 from src.packages.photos import repository
-from src.packages.photos.config import (
+from src.storage.factory import storage_port
+from src.storage.port import UploadGrant, object_key
+
+from .config import (
     ALLOWED_CONTENT_TYPES,
     MAX_FILE_SIZE,
     UPLOAD_GRANT_TTL,
     photos_settings,
 )
-from src.packages.photos.schemas import AvailablePhotoRow, ConfirmationOutcome, GrantFileInput
-from src.storage.factory import storage_port
-from src.storage.port import UploadGrant, object_key
+from .schemas import (
+    AvailablePhotoRow,
+    ConfirmationOutcome,
+    GalleryCounts,
+    GalleryResult,
+    GrantFileInput,
+    RatingFilter,
+)
 
 
 def _validate_files(files: list[GrantFileInput]) -> None:
@@ -97,6 +105,30 @@ async def grant_batch(
 
 async def list_photos(connection: AsyncConnection, *, album_id: UUID) -> list[AvailablePhotoRow]:
     return await repository.list_available_photos(connection, album_id=album_id)
+
+
+async def get_gallery(
+    connection: AsyncConnection, *, album_id: UUID, user_id: UUID, rating_filter: RatingFilter
+) -> GalleryResult:
+    """Fetches every available photo with `user_id`'s own rating exactly
+    once, regardless of which filter was asked for (D1), and computes
+    the four counts in that same pass (D2): the requested slice and the
+    counts for the other three filters always come from the same rows,
+    so they can never disagree with each other.
+    """
+    rows = await repository.list_photos_with_rating(
+        connection, album_id=album_id, user_id=user_id, rating_filter="all"
+    )
+    approved = [row for row in rows if row.approved is True]
+    rejected = [row for row in rows if row.approved is False]
+    unrated = [row for row in rows if row.approved is None]
+    counts = GalleryCounts(
+        total=len(rows), approved=len(approved), rejected=len(rejected), unrated=len(unrated)
+    )
+    selected = {"all": rows, "approved": approved, "rejected": rejected, "unrated": unrated}[
+        rating_filter
+    ]
+    return GalleryResult(photos=selected, counts=counts)
 
 
 async def confirm_batch(

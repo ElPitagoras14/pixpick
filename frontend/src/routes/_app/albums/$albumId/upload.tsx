@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ImagePlusIcon } from "lucide-react";
 import { type ChangeEvent, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ function UploadView() {
 			<Link
 				to="/albums/$albumId"
 				params={{ albumId }}
+				search={{ filter: "all" }}
 				className="text-muted-foreground mb-4 inline-block text-xs"
 			>
 				← Back to album
@@ -53,8 +55,17 @@ function UploadView() {
 				className="hidden"
 				onChange={handleFilesSelected}
 			/>
-			<div>
-				<Button onClick={() => inputRef.current?.click()}>Choose photos</Button>
+			{/* The one thing this page exists to do, so it gets the visual
+			weight: a dashed empty-state card matching the rest of the app's
+			own idiom, not a plain default-sized button among others. */}
+			<div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
+				<p className="text-muted-foreground text-sm">
+					Pick one or more photos to add to this album.
+				</p>
+				<Button size="lg" onClick={() => inputRef.current?.click()}>
+					<ImagePlusIcon />
+					Choose photos
+				</Button>
 			</div>
 
 			{items.length > 0 && (

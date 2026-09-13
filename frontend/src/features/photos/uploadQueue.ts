@@ -3,6 +3,7 @@ import axios from "axios";
 import { useCallback, useState } from "react";
 
 import { albumsQueryOptions } from "@/features/albums/api";
+import { galleryQueryKeyPrefix } from "@/features/gallery/api";
 import {
 	type ConfirmationStatus,
 	confirmPhotoBatch,
@@ -243,6 +244,12 @@ export function useUploadQueue(albumId: string) {
 				);
 				queryClient.invalidateQueries({
 					queryKey: photosQueryOptions(albumId).queryKey,
+				});
+				// The grid the uploader actually watches is the gallery now
+				// (rating-gallery spec): every one of its filters, since a
+				// newly available photo always belongs to "all" and "unrated".
+				queryClient.invalidateQueries({
+					queryKey: galleryQueryKeyPrefix(albumId),
 				});
 				queryClient.invalidateQueries({
 					queryKey: albumsQueryOptions().queryKey,

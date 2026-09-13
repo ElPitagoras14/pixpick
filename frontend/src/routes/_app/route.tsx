@@ -50,6 +50,7 @@ function AppLayout() {
 				<nav className="flex items-center gap-4">
 					<Link
 						to="/albums"
+						search={{ group: "own" }}
 						className="text-sm font-semibold"
 						activeProps={{ className: "underline" }}
 					>
