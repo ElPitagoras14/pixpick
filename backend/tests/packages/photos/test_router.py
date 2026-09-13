@@ -9,7 +9,13 @@ from src.packages.photos import service as photos_service
 from src.packages.photos.schemas import GrantFileInput
 from src.packages.photos.warmup import warm_up_variants
 from tests.authhelpers import log_in
-from tests.factories import create_album, create_photo, create_session, create_user
+from tests.factories import (
+    create_album,
+    create_membership,
+    create_photo,
+    create_session,
+    create_user,
+)
 
 _ONE_FILE = {"contentType": "image/jpeg", "size": 1000, "width": 100, "height": 100}
 
@@ -166,7 +172,7 @@ async def test_freeing_space_re_enables_granting(committed_connection, fake_stor
         )
     await committed_connection.commit()
 
-    await photos_service.delete_photo(album_id=album.id, owner_id=owner.id, photo_id=photo.id)
+    await photos_service.delete_photo(album_id=album.id, user_id=owner.id, photo_id=photo.id)
 
     grants = await photos_service.grant_batch(
         committed_connection,
@@ -202,6 +208,30 @@ async def test_listing_photos_only_shows_available_ones(client, connection):
     assert response.status_code == 200
     ids = [photo["id"] for photo in response.json()["data"]]
     assert ids == [str(available.id)]
+
+
+async def test_a_member_can_view_the_grid_without_owning_the_album(client, connection):
+    owner = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id)
+    photo = await create_photo(connection, album_id=album.id, position=1)
+    member = await log_in(client, connection)
+    await create_membership(connection, album_id=album.id, user_id=member.id)
+
+    response = client.get(f"/api/albums/{album.id}/photos")
+
+    assert response.status_code == 200
+    assert [p["id"] for p in response.json()["data"]] == [str(photo.id)]
+
+
+async def test_a_member_who_is_not_the_owner_cannot_grant_upload_slots(client, connection):
+    owner = await create_user(connection)
+    album = await create_album(connection, owner_id=owner.id)
+    member = await log_in(client, connection)
+    await create_membership(connection, album_id=album.id, user_id=member.id)
+
+    response = client.post(f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]})
+
+    assert response.status_code == 403
 
 
 # --- Confirm: its own transaction (D6), so setup here commits for real. ---
@@ -335,6 +365,23 @@ async def test_confirming_for_a_foreign_album_responds_like_a_nonexistent_one(
     assert response.status_code == 404
 
 
+async def test_a_member_who_is_not_the_owner_cannot_confirm_photos(
+    client, committed_connection, fake_storage
+):
+    owner = await create_user(committed_connection)
+    album = await create_album(committed_connection, owner_id=owner.id)
+    photo = await create_photo(committed_connection, album_id=album.id, position=1, available=False)
+    member = await log_in(client, committed_connection)
+    await create_membership(committed_connection, album_id=album.id, user_id=member.id)
+    await committed_connection.commit()
+
+    response = client.post(
+        f"/api/albums/{album.id}/photos/confirm", json={"photoIds": [str(photo.id)]}
+    )
+
+    assert response.status_code == 403
+
+
 async def test_a_failed_warmup_is_only_logged(monkeypatch):
     """Task 4.4: a warm-up failure never propagates -- it's caught and
     logged, and nothing about a photo's own state depends on it."""
@@ -415,3 +462,16 @@ async def test_deleting_a_foreign_photo_responds_like_a_nonexistent_one(client, 
     response = client.delete(f"/api/albums/{foreign_album.id}/photos/{foreign_photo.id}")
 
     assert response.status_code == 404
+
+
+async def test_a_member_who_is_not_the_owner_cannot_delete_a_photo(client, committed_connection):
+    owner = await create_user(committed_connection)
+    album = await create_album(committed_connection, owner_id=owner.id)
+    photo = await create_photo(committed_connection, album_id=album.id, position=1)
+    member = await log_in(client, committed_connection)
+    await create_membership(committed_connection, album_id=album.id, user_id=member.id)
+    await committed_connection.commit()
+
+    response = client.delete(f"/api/albums/{album.id}/photos/{photo.id}")
+
+    assert response.status_code == 403

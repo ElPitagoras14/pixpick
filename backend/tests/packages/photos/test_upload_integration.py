@@ -58,7 +58,7 @@ async def test_confirming_a_batch_warms_the_rating_variant_in_the_real_edge_cach
         assert upload_response.status_code < 300
 
         results, warm_up_keys = await photos_service.confirm_batch(
-            album_id=album.id, owner_id=user.id, photo_ids=[photo_id]
+            album_id=album.id, user_id=user.id, photo_ids=[photo_id]
         )
 
         assert results[0].status == "available"

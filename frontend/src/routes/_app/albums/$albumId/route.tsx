@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { albumQueryOptions } from "@/features/albums/api";
+import { ShareDialog } from "@/features/shares/ShareDialog";
 
 // The album is loaded once, here (D11): the grid, the upload view, and
 // the two views a later change adds all read it from this layout's own
@@ -29,11 +30,26 @@ function AlbumLayout() {
 						<p className="text-muted-foreground text-sm">{album.description}</p>
 					)}
 				</div>
-				<Button asChild size="sm">
-					<Link to="/albums/$albumId/upload" params={{ albumId }}>
-						Upload photos
-					</Link>
-				</Button>
+				<div className="flex items-center gap-2">
+					{album.isOwner && (
+						<>
+							<ShareDialog albumId={albumId} />
+							<Button asChild size="sm">
+								<Link to="/albums/$albumId/upload" params={{ albumId }}>
+									Upload photos
+								</Link>
+							</Button>
+						</>
+					)}
+					{album.pendingCount > 0 && (
+						<Button asChild size="sm" variant="secondary">
+							<Link to="/albums/$albumId/swipe" params={{ albumId }}>
+								Rate {album.pendingCount} photo
+								{album.pendingCount === 1 ? "" : "s"}
+							</Link>
+						</Button>
+					)}
+				</div>
 			</div>
 			<Outlet />
 		</div>

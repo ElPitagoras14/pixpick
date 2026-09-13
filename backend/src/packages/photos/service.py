@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from src.database.utils import transaction
 from src.exceptions import NotFoundError, StateConflictError, ValidationFailedError
 from src.packages.albums import repository as albums_repository
+from src.packages.albums import service as albums_service
 from src.packages.photos import repository
 from src.packages.photos.config import (
     ALLOWED_CONTENT_TYPES,
@@ -99,7 +100,7 @@ async def list_photos(connection: AsyncConnection, *, album_id: UUID) -> list[Av
 
 
 async def confirm_batch(
-    *, album_id: UUID, owner_id: UUID, photo_ids: list[UUID]
+    *, album_id: UUID, user_id: UUID, photo_ids: list[UUID]
 ) -> tuple[list[ConfirmationOutcome], list[str]]:
     """Verifies each photo against its real object (photo-upload spec),
     never against what the client declared. Deliberately outside any
@@ -109,11 +110,16 @@ async def confirm_batch(
     across a wait on storage (D6).
     """
     async with transaction() as connection:
+        # Confirming, like granting, is owner-only (album-management spec,
+        # modified by add-share-and-swipe): raises `ForbiddenError` for a
+        # member who isn't the owner, `NotFoundError` for anyone else.
+        # Deliberately not `Depends(get_owned_album)` at the router, per
+        # D6 above, so the check happens here instead.
+        await albums_service.require_owned_album(connection, album_id=album_id, user_id=user_id)
         photos = await repository.get_owned_photos(
-            connection, album_id=album_id, owner_id=owner_id, photo_ids=photo_ids
+            connection, album_id=album_id, owner_id=user_id, photo_ids=photo_ids
         )
-    if photos is None:
-        raise NotFoundError()
+    assert photos is not None
 
     results: list[ConfirmationOutcome] = []
     warm_up_keys: list[str] = []
@@ -152,13 +158,17 @@ async def confirm_batch(
     return results, warm_up_keys
 
 
-async def delete_photo(*, album_id: UUID, owner_id: UUID, photo_id: UUID) -> None:
+async def delete_photo(*, album_id: UUID, user_id: UUID, photo_id: UUID) -> None:
     """Its own transaction, committed before anything talks to storage
-    (D6) -- the same reasoning as `albums.service.delete_album`.
+    (D6) -- the same reasoning as `albums.service.delete_album`. Deleting
+    a photo is owner-only (album-management spec, modified by
+    add-share-and-swipe), checked here rather than through
+    `Depends(get_owned_album)`, for the same D6 reason `confirm_batch` does.
     """
     async with transaction() as connection:
+        await albums_service.require_owned_album(connection, album_id=album_id, user_id=user_id)
         deleted = await repository.delete_owned_photo(
-            connection, album_id=album_id, owner_id=owner_id, photo_id=photo_id
+            connection, album_id=album_id, owner_id=user_id, photo_id=photo_id
         )
     if not deleted:
         raise NotFoundError()

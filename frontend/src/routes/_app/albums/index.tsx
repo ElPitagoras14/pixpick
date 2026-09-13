@@ -38,7 +38,12 @@ function AlbumsList() {
 							<Link
 								to="/albums/$albumId"
 								params={{ albumId: album.id }}
-								className="group block overflow-hidden rounded-xl border"
+								// `flex h-full flex-col`: a grid row already stretches
+								// each `<li>` to the tallest one, but the link itself
+								// still sized to its own content -- a card with the
+								// "to rate" line and one without would otherwise show
+								// different heights inside the same, equally tall row.
+								className="group flex h-full flex-col overflow-hidden rounded-xl border"
 							>
 								<div className="bg-muted aspect-square w-full overflow-hidden">
 									{album.coverUrl ? (
@@ -53,11 +58,17 @@ function AlbumsList() {
 										</div>
 									)}
 								</div>
-								<div className="p-2">
+								<div className="flex flex-1 flex-col justify-center gap-0.5 p-2">
 									<p className="truncate text-sm font-medium">{album.title}</p>
 									<p className="text-muted-foreground text-xs">
 										{album.photoCount} photo{album.photoCount === 1 ? "" : "s"}
+										{!album.isOwner && " · Shared"}
 									</p>
+									{album.pendingCount > 0 && (
+										<p className="text-xs font-medium text-primary">
+											{album.pendingCount} to rate
+										</p>
+									)}
 								</div>
 							</Link>
 						</li>

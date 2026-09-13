@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_all, fetch_one, fetch_val, fetch_val_or_none, write
-from src.packages.albums.schemas import AlbumListRow, AlbumRecord
+from src.packages.albums.schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
 
 
 async def insert_album(
@@ -48,11 +48,16 @@ async def get_owned_album(
     )
 
 
-async def list_owned_albums(connection: AsyncConnection, *, owner_id: UUID) -> list[AlbumListRow]:
-    """One query for the whole list (D9): a lateral subquery resolves each
-    album's available-photo count and cover in the same round trip, never
-    one query per album. `array_agg(... order by position)` picks the
-    first available photo without a second subquery for the cover alone.
+async def list_member_albums(connection: AsyncConnection, *, user_id: UUID) -> list[AlbumListRow]:
+    """One query for the whole list (D9, D10): "mine" and "shared with me"
+    are the same set, since creating an album makes its owner a member of
+    it (album-sharing spec) -- so the list is every album `user_id` is a
+    member of, never a union of two separate queries. The same lateral
+    subquery that resolves each album's available-photo count and cover
+    also resolves how many of them `user_id` hasn't rated yet, all in the
+    same round trip, never one query per album. `array_agg(... order by
+    position)` picks the first available photo without a second subquery
+    for the cover alone.
     """
     return await fetch_all(
         connection,
@@ -62,21 +67,96 @@ async def list_owned_albums(connection: AsyncConnection, *, owner_id: UUID) -> l
             a.title,
             a.description,
             a.created_at,
+            (a.owner_id = :user_id) as is_owner,
             coalesce(agg.photo_count, 0) as photo_count,
-            agg.cover_photo_id
+            agg.cover_photo_id,
+            coalesce(agg.pending_count, 0) as pending_count
         from albums a
+        join album_members m on m.album_id = a.id and m.user_id = :user_id
         left join lateral (
             select
                 count(*) as photo_count,
-                (array_agg(p.id order by p."position" asc))[1] as cover_photo_id
+                (array_agg(p.id order by p."position" asc))[1] as cover_photo_id,
+                count(*) filter (
+                    where not exists (
+                        select 1 from photo_ratings r
+                        where r.photo_id = p.id and r.user_id = :user_id
+                    )
+                ) as pending_count
             from available_photos p
             where p.album_id = a.id
         ) agg on true
-        where a.owner_id = :owner_id
         order by a.created_at desc, a.id desc
         """,
         AlbumListRow,
-        {"owner_id": owner_id},
+        {"user_id": user_id},
+    )
+
+
+async def get_accessible_album(
+    connection: AsyncConnection, *, album_id: UUID, user_id: UUID
+) -> AlbumDetailRow | None:
+    """An album `user_id` can see: its owner, or a member of it
+    (album-management spec, modified by add-share-and-swipe). `None` both
+    when the album doesn't exist and when `user_id` has no relation to it
+    at all -- the same collapse `get_owned_album` already applies to
+    ownership alone, so an opaque id SHALL NOT confirm to a stranger that
+    the album exists.
+
+    Resolves how many of the album's available photos `user_id` hasn't
+    rated yet in the same round trip (D10): the pending count travels
+    with the album wherever it's shown, never a query of its own.
+    """
+    return await fetch_one(
+        connection,
+        """
+        select
+            a.id, a.owner_id, a.title, a.description, a.created_at, a.updated_at,
+            coalesce(pending.count, 0) as pending_count
+        from albums a
+        join album_members m on m.album_id = a.id and m.user_id = :user_id
+        left join lateral (
+            select count(*) as count
+            from available_photos p
+            where p.album_id = a.id
+              and not exists (
+                  select 1 from photo_ratings r
+                  where r.photo_id = p.id and r.user_id = :user_id
+              )
+        ) pending on true
+        where a.id = :album_id
+        """,
+        AlbumDetailRow,
+        {"album_id": album_id, "user_id": user_id},
+    )
+
+
+async def add_member(connection: AsyncConnection, *, album_id: UUID, user_id: UUID) -> None:
+    """Idempotent (album-sharing spec): creating an album, and entering
+    its link more than once, both call this, and neither ever produces a
+    duplicate row or an error -- the composite primary key on
+    `album_members` is what actually enforces that.
+    """
+    await write(
+        connection,
+        """
+        insert into album_members (album_id, user_id)
+        values (:album_id, :user_id)
+        on conflict (album_id, user_id) do nothing
+        """,
+        {"album_id": album_id, "user_id": user_id},
+    )
+
+
+async def is_member(connection: AsyncConnection, *, album_id: UUID, user_id: UUID) -> bool:
+    return await fetch_val(
+        connection,
+        """
+        select exists(
+            select 1 from album_members where album_id = :album_id and user_id = :user_id
+        )
+        """,
+        {"album_id": album_id, "user_id": user_id},
     )
 
 

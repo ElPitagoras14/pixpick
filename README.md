@@ -111,6 +111,16 @@ cd backend
 uv run python -m src.packages.photos.reconcile
 ```
 
+## Sharing and rating
+
+Every album has a "Share" control, visible only to its owner: opening it fetches the album's current link, generating the first one if it has none yet -- opening the dialog never itself changes what's shared. Anyone who opens that link, once signed in, becomes a member of the album: they can see it, see its photos, and rate them, but only the owner can rename it, delete it, add or remove photos, or administer its link.
+
+Regenerating the link revokes the current one and issues a new one in the same step, so an album never briefly has two live links or none. Revoking leaves the album without a link until a new one is generated. Neither one ever removes an existing member: whoever already entered keeps their access and every rating they've made, exactly as before. Only someone who hasn't entered yet is turned away by a revoked link -- and a link that's unknown, revoked, or well-formed but foreign to any album all answer identically, so none of the three ever confirms that an album exists.
+
+Rating is a swipe: drag the card right to approve, left to reject, or use the on-screen buttons or the arrow keys -- the gesture is a shortcut, never the only way to complete a sequence. The deck shows exactly the album's available photos a person hasn't rated yet, in the album's own order; there's no separate "finished" flag anywhere -- what's pending is always the live difference between the album's photos and that person's own ratings, so uploading more photos to an album someone already finished makes those new photos pending for them again, automatically. Rating the same photo twice is harmless: the second one simply replaces the first. The owner rates their own album the same way anyone else does -- creating an album already makes its owner a member of it, with nothing special to set up first.
+
+How many photos are still pending shows up both in the albums list and inside the album itself, for whoever's looking at it -- it's their own count, since two people rating the same album track their progress independently.
+
 ## Backend (`backend/`)
 
 | Category           | Technology                                     |
@@ -191,6 +201,7 @@ uv self update
 | Styling               | [Tailwind CSS v4](https://tailwindcss.com/) + [tw-animate-css](https://www.npmjs.com/package/tw-animate-css) |
 | UI components         | [shadcn](https://ui.shadcn.com/) on top of [Radix UI](https://www.radix-ui.com/) |
 | Icons                 | [lucide-react](https://lucide.dev/)                               |
+| Gesture / animation   | [@use-gesture/react](https://use-gesture.netlify.app/) (swipe detection) + [motion](https://motion.dev/) (`motion/mini`, the reduced release-animation engine) |
 | UI utilities          | class-variance-authority, clsx, tailwind-merge                   |
 | Data validation       | [Zod](https://zod.dev/)                                           |
 | HTTP client           | [axios](https://axios-http.com/)                                  |
