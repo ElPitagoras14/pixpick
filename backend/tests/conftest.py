@@ -1,7 +1,5 @@
-import asyncio
 import os
 import subprocess
-import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -14,14 +12,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 from src.database.dependencies import get_connection
+from src.loop import ensure_compatible_event_loop_policy
 from src.main import app
 
-# psycopg3's async mode cannot run on asyncio's default ProactorEventLoop on
-# Windows (see backend/src/loop.py). pytest-asyncio creates its loop through
-# the current policy, so setting it here -- before any test runs -- is
-# enough; it needs no equivalent of uvicorn's --loop workaround.
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# pytest-asyncio creates its own event loop through the current policy, so
+# calling this here -- before any test runs -- is enough (src/loop.py);
+# it needs no equivalent of uvicorn's old `--loop` workaround.
+ensure_compatible_event_loop_policy()
 
 load_dotenv()
 

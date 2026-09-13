@@ -1,0 +1,78 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Backend: dev server",
+			"type": "shell",
+			"command": "uv run python -m src.main",
+			"options": {
+				"cwd": "${workspaceFolder}/backend",
+				// Only PUBLIC_URL differs from .env's own value: the login
+				// flow's final redirect is always built from it (D3, D4 in
+				// auth.router, and its own test on purpose -- never from the
+				// request's scheme/host), and nginx (.env's PUBLIC_URL)
+				// isn't where the app actually lives when this task runs it
+				// natively. The frontend dev server's existing proxy
+				// (vite.config.ts) already forwards /api and /images from
+				// here to the right place, so nothing else needs to change.
+				"env": {
+					"PUBLIC_URL": "http://localhost:3000"
+				}
+			},
+			"isBackground": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "native"
+			},
+			"problemMatcher": {
+				"pattern": {
+					"regexp": "^.*$",
+					"file": 1,
+					"location": 2,
+					"message": 3
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^.*Started server process.*$",
+					"endsPattern": "^.*Application startup complete\\.$"
+				}
+			}
+		},
+		{
+			"label": "Frontend: dev server",
+			"type": "shell",
+			"command": "pnpm dev",
+			"options": {
+				"cwd": "${workspaceFolder}/frontend",
+				// Silences a harmless but noisy warning: this machine's own
+				// NODE_EXTRA_CA_CERTS points to a Unix-style path Git Bash
+				// resolves but Node on Windows can't load directly. Scoped to
+				// this task only -- the machine-wide variable stays untouched,
+				// since something else on this machine may depend on it.
+				"env": {
+					"NODE_EXTRA_CA_CERTS": ""
+				}
+			},
+			"isBackground": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "native"
+			},
+			"problemMatcher": {
+				"pattern": {
+					"regexp": "^.*$",
+					"file": 1,
+					"location": 2,
+					"message": 3
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^\\s*VITE.*$",
+					"endsPattern": "^\\s*➜\\s+Local:.*$"
+				}
+			}
+		}
+	]
+}
