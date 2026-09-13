@@ -1,0 +1,113 @@
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, BackgroundTasks, Depends
+from pydantic import Field
+from sqlalchemy.ext.asyncio import AsyncConnection
+
+from src.database.dependencies import get_connection
+from src.models import ApiModel
+from src.packages.albums.dependencies import get_owned_album
+from src.packages.albums.schemas import AlbumRecord
+from src.packages.auth.dependencies import get_current_user
+from src.packages.auth.schemas import UserRecord
+from src.packages.photos import service
+from src.packages.photos.config import MAX_BATCH_SIZE
+from src.packages.photos.responses import (
+    ConfirmationResultResponse,
+    PhotoGrantResponse,
+    PhotoResponse,
+)
+from src.packages.photos.schemas import GrantFileInput
+from src.packages.photos.warmup import warm_up_variants
+from src.responses import Envelope
+
+router = APIRouter(prefix="/albums/{album_id}/photos")
+
+
+class GrantPhotoRequest(ApiModel):
+    content_type: str
+    size: int
+    width: int | None = None
+    height: int | None = None
+
+    def to_input(self) -> GrantFileInput:
+        return GrantFileInput(
+            content_type=self.content_type,
+            size=self.size,
+            width=self.width,
+            height=self.height,
+        )
+
+
+class GrantPhotosRequest(ApiModel):
+    # The batch ceiling (D13) is enforced here, before anything reaches
+    # the service: a bigger selection is the client's own job to split
+    # into successive batches, never this endpoint's to accept.
+    files: Annotated[list[GrantPhotoRequest], Field(min_length=1, max_length=MAX_BATCH_SIZE)]
+
+
+class ConfirmPhotosRequest(ApiModel):
+    photo_ids: Annotated[list[UUID], Field(min_length=1)]
+
+
+@router.get("")
+async def list_photos(
+    album: AlbumRecord = Depends(get_owned_album),
+    connection: AsyncConnection = Depends(get_connection),
+) -> Envelope[list[PhotoResponse]]:
+    rows = await service.list_photos(connection, album_id=album.id)
+    return Envelope(data=[PhotoResponse.from_row(row, album_id=album.id) for row in rows])
+
+
+@router.post("/grants")
+async def grant_photos(
+    body: GrantPhotosRequest,
+    album: AlbumRecord = Depends(get_owned_album),
+    connection: AsyncConnection = Depends(get_connection),
+) -> Envelope[list[PhotoGrantResponse]]:
+    grants = await service.grant_batch(
+        connection,
+        album_id=album.id,
+        owner_id=album.owner_id,
+        files=[file.to_input() for file in body.files],
+    )
+    return Envelope(
+        data=[
+            PhotoGrantResponse.from_grant(photo_id=photo_id, position=position, grant=grant)
+            for photo_id, position, grant in grants
+        ]
+    )
+
+
+@router.post("/confirm")
+async def confirm_photos(
+    album_id: UUID,
+    body: ConfirmPhotosRequest,
+    background_tasks: BackgroundTasks,
+    user: UserRecord = Depends(get_current_user),
+) -> Envelope[list[ConfirmationResultResponse]]:
+    # Deliberately not `Depends(get_connection)`: confirming verifies
+    # each photo against its real object in storage, a network call that
+    # SHALL NOT happen while any transaction sits open (D6) -- see
+    # `service.confirm_batch`.
+    results, warm_up_keys = await service.confirm_batch(
+        album_id=album_id, owner_id=user.id, photo_ids=body.photo_ids
+    )
+    if warm_up_keys:
+        # After responding, never before (D7, task 4.5): scheduled here
+        # so it runs once the response is on its way, not folded into
+        # the awaited work above.
+        background_tasks.add_task(warm_up_variants, warm_up_keys)
+    return Envelope(data=[ConfirmationResultResponse.from_outcome(r) for r in results])
+
+
+@router.delete("/{photo_id}")
+async def delete_photo(
+    album_id: UUID,
+    photo_id: UUID,
+    user: UserRecord = Depends(get_current_user),
+) -> Envelope[None]:
+    # Deliberately not `Depends(get_connection)`: see `service.delete_photo`.
+    await service.delete_photo(album_id=album_id, owner_id=user.id, photo_id=photo_id)
+    return Envelope(data=None)

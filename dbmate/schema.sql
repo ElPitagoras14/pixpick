@@ -34,6 +34,61 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: albums; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.albums (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    owner_id uuid NOT NULL,
+    title text NOT NULL,
+    description text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: photos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.photos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    album_id uuid NOT NULL,
+    "position" integer NOT NULL,
+    available boolean DEFAULT false NOT NULL,
+    declared_content_type text NOT NULL,
+    declared_size integer NOT NULL,
+    size integer,
+    width integer,
+    height integer,
+    upload_expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: available_photos; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.available_photos AS
+ SELECT id,
+    album_id,
+    "position",
+    available,
+    declared_content_type,
+    declared_size,
+    size,
+    width,
+    height,
+    upload_expires_at,
+    created_at,
+    updated_at
+   FROM public.photos
+  WHERE (available = true);
+
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -70,6 +125,30 @@ CREATE TABLE public.users (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: albums albums_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.albums
+    ADD CONSTRAINT albums_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: photos photos_album_id_position_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.photos
+    ADD CONSTRAINT photos_album_id_position_key UNIQUE (album_id, "position");
+
+
+--
+-- Name: photos photos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.photos
+    ADD CONSTRAINT photos_pkey PRIMARY KEY (id);
 
 
 --
@@ -113,10 +192,38 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: albums_owner_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX albums_owner_id_idx ON public.albums USING btree (owner_id);
+
+
+--
+-- Name: photos_album_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX photos_album_id_idx ON public.photos USING btree (album_id);
+
+
+--
 -- Name: sessions_user_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX sessions_user_id_idx ON public.sessions USING btree (user_id);
+
+
+--
+-- Name: albums set_albums_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_albums_updated_at BEFORE UPDATE ON public.albums FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: photos set_photos_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_photos_updated_at BEFORE UPDATE ON public.photos FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 
 --
@@ -131,6 +238,22 @@ CREATE TRIGGER set_sessions_updated_at BEFORE UPDATE ON public.sessions FOR EACH
 --
 
 CREATE TRIGGER set_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: albums albums_owner_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.albums
+    ADD CONSTRAINT albums_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: photos photos_album_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.photos
+    ADD CONSTRAINT photos_album_id_fkey FOREIGN KEY (album_id) REFERENCES public.albums(id) ON DELETE CASCADE;
 
 
 --
@@ -154,4 +277,5 @@ ALTER TABLE ONLY public.sessions
 
 INSERT INTO public.schema_migrations (version) VALUES
     ('0001'),
-    ('0002');
+    ('0002'),
+    ('0003');

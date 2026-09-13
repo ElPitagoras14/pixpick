@@ -9,6 +9,7 @@ from src.exceptions import (
     DatabaseError,
     ForbiddenError,
     NotFoundError,
+    StateConflictError,
     UnauthenticatedError,
     ValidationFailedError,
 )
@@ -53,6 +54,17 @@ async def _validation_failed_handler(request: Request, exc: ValidationFailedErro
     return JSONResponse(
         status_code=422,
         content=error_envelope("validation_failed", exc.message, field=exc.field),
+    )
+
+
+async def _state_conflict_handler(request: Request, exc: StateConflictError) -> JSONResponse:
+    """409, never 422 (api-conventions spec, added by add-albums-and-upload):
+    the status code alone is what tells a client this apart from a
+    validation failure -- nothing here names a field as invalid.
+    """
+    return JSONResponse(
+        status_code=409,
+        content=error_envelope(exc.code, exc.message, details=exc.details),
     )
 
 
@@ -116,6 +128,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ForbiddenError, _forbidden_handler)
     app.add_exception_handler(NotFoundError, _not_found_handler)
     app.add_exception_handler(ValidationFailedError, _validation_failed_handler)
+    app.add_exception_handler(StateConflictError, _state_conflict_handler)
     app.add_exception_handler(InvalidStateError, _invalid_state_handler)
     app.add_exception_handler(InvalidCodeError, _invalid_code_handler)
     app.add_exception_handler(RequestValidationError, _request_validation_handler)

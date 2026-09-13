@@ -96,9 +96,27 @@ async def fetch_all[T: BaseModel](
 
 
 async def fetch_val(connection: AsyncConnection, query: str, params: dict | None = None):
-    """Reads a single scalar value (a count, an id, a boolean check)."""
+    """Reads a single scalar value that the query always produces exactly
+    one row for (a count, an aggregate, a boolean check) -- never a query
+    that can legitimately match nothing, which is what `fetch_val_or_none`
+    is for.
+    """
     try:
         result = await connection.execute(text(query), params or {})
         return result.scalar_one()
+    except SQLAlchemyError as exc:
+        raise QueryExecutionError("failed to execute a read") from exc
+
+
+async def fetch_val_or_none(connection: AsyncConnection, query: str, params: dict | None = None):
+    """Reads a single scalar value from a query that may legitimately
+    match no row (an id looked up by a filter that can miss, a `delete
+    ... returning` that found nothing to delete) -- `None` in that case,
+    instead of `fetch_val`'s `scalar_one()` raising (added by
+    add-albums-and-upload, for exactly that shape of query).
+    """
+    try:
+        result = await connection.execute(text(query), params or {})
+        return result.scalar_one_or_none()
     except SQLAlchemyError as exc:
         raise QueryExecutionError("failed to execute a read") from exc

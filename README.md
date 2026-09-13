@@ -92,6 +92,25 @@ docker run --rm --network pixpick_pixpick --entrypoint sh \
   '
 ```
 
+## Albums and uploads
+
+Create an album, then upload photos to it from the album's own page: pick one or more files, and each uploads on its own, with its own progress and its own retry if it fails. A photo only appears in the album -- in the grid, in its photo count, as its cover -- once its upload is actually confirmed; a photo whose upload never finishes never shows up anywhere, and never counts against anything.
+
+Uploading is two steps, neither of which ever sends the file's bytes through the API: the client asks for a batch of upload grants, writes each file straight to the object storage with the grant it got, and then confirms the batch. Confirming is what verifies the object actually landed -- checking its real size and type against what was declared, never trusting the client's word for it -- and only then marks the photo available.
+
+| Setting | What it governs |
+| ------- | ---------------- |
+| `ALBUM_MAX_PHOTOS` | The most photos a single album admits (default `50`). A product constraint on the swipe-to-rate interaction, not a storage quota. |
+
+`ALBUM_MAX_PHOTOS` only conditions *adding* photos: lowering it never removes a photo from an album that already exceeds it, and that album stays exactly as readable and usable as any other -- the only thing that stops working is granting it more. Raising it back, or freeing space by deleting a few photos, is all it takes to add again.
+
+An upload grant expires after a while. If the file behind it is never actually uploaded, the photo stays invisible forever and is harmless on its own, but its row and (if the upload partially landed) its object still take up space. Run the reconciliation command whenever it's convenient -- there's no schedule that runs it automatically, on purpose (nothing it cleans up is observable until then):
+
+```bash
+cd backend
+uv run python -m src.packages.photos.reconcile
+```
+
 ## Backend (`backend/`)
 
 | Category           | Technology                                     |
