@@ -82,7 +82,6 @@ async def grant_batch(
             album_id=str(album_id),
             photo_id=str(photo_id),
             content_type=file.content_type,
-            max_size=MAX_FILE_SIZE,
             ttl_seconds=int(UPLOAD_GRANT_TTL.total_seconds()),
         )
         rows.append(

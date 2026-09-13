@@ -33,12 +33,17 @@ services:
   # Runs once, applies pending migrations, and exits (D6). Its connection
   # string is assembled here from the same Postgres server values instead of
   # being written by hand (D7). Bakes the pinned dbmate version and the
-  # project's migrations into its image -- see dbmate/Dockerfile.
+  # project's migrations into its image -- see dbmate/Dockerfile. `up`, not
+  # `migrate` (D4 in add-cloud-media-adapters): POSTGRES_DB names a
+  # different database per provider set, and the first time a given one is
+  # used it doesn't exist yet -- `up` creates it before migrating, exactly
+  # as `migrate` alone would for a database that already does, so this is
+  # a no-op every other time.
   migrate:
     image: ghcr.io/elpitagoras14/pixpick-migrate:latest
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-    command: ["--no-dump-schema", "migrate"]
+    command: ["--no-dump-schema", "up"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,22 +60,40 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       PUBLIC_URL: ${PUBLIC_URL}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER}
-      STORAGE_BUCKET: ${STORAGE_BUCKET}
-      STORAGE_BROWSER_ENDPOINT: ${STORAGE_BROWSER_ENDPOINT}
-      # Containers mode reaches the storage by its service name; the native
-      # default in .env.example is the host-published port instead (D4).
-      STORAGE_SERVER_ENDPOINT: http://storage:9000
-      STORAGE_ROOT_USER: ${STORAGE_ROOT_USER}
-      STORAGE_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD}
+      # Both providers' groups, unconditionally (D9 in
+      # add-cloud-media-adapters) -- same as GOOGLE_CLIENT_ID/SECRET above:
+      # only STORAGE_PROVIDER's value decides which one the backend
+      # actually reads, so the other sits here unused rather than branched
+      # around.
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_BROWSER_ENDPOINT: ${MINIO_BROWSER_ENDPOINT}
+      # Containers mode reaches MinIO by its service name; the native
+      # default in .env.example is the host-published port instead (D4 in
+      # add-media-ports-and-local-adapters) -- unconditional, unlike before
+      # this change, since it's simply unused while a cloud provider is
+      # active (D9 in add-cloud-media-adapters).
+      MINIO_SERVER_ENDPOINT: http://storage:9000
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_ENDPOINT: ${R2_ENDPOINT}
       IMAGE_PROVIDER: ${IMAGE_PROVIDER}
       IMAGE_SIGNING_KEY: ${IMAGE_SIGNING_KEY}
       IMAGE_SIGNING_SALT: ${IMAGE_SIGNING_SALT}
+      IMAGEKIT_URL_ENDPOINT: ${IMAGEKIT_URL_ENDPOINT}
+      IMAGEKIT_PRIVATE_KEY: ${IMAGEKIT_PRIVATE_KEY}
       ALBUM_MAX_PHOTOS: ${ALBUM_MAX_PHOTOS}
     depends_on:
       migrate:
         condition: service_completed_successfully
+      # Only present in the local profile (D1 in add-cloud-media-adapters):
+      # `required: false` means this is simply skipped, not an error, when
+      # the cloud profile leaves it out of the resolved project entirely.
       storage-init:
         condition: service_completed_successfully
+        required: false
     networks:
       - pixpick
 
@@ -85,19 +108,22 @@ services:
   # The object storage. The browser writes to it directly (D3 in
   # add-media-ports-and-local-adapters), so unlike every other service in
   # this file it is meant to be reached from outside the Docker network too
-  # -- compose.dev.yaml is what publishes its port.
+  # -- compose.dev.yaml is what publishes its port. Only started in the
+  # local profile (D1 in add-cloud-media-adapters): a cloud STORAGE_PROVIDER
+  # needs none of this, its bucket already exists at the provider.
   storage:
+    profiles: ["local"]
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     environment:
-      MINIO_ROOT_USER: ${STORAGE_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD}
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY}
       # MinIO has no per-bucket CORS API -- PutBucketCors is a permanent
       # no-op on its server (verified against its source: every bucket-CORS
       # handler always answers NotImplemented). Origins are declared here
       # instead, server-wide, which is exactly as precise as a per-bucket
       # policy given this project has a single bucket (D3, D9 in
       # add-media-ports-and-local-adapters).
-      MINIO_API_CORS_ALLOW_ORIGIN: ${STORAGE_ALLOWED_ORIGINS}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_ALLOWED_ORIGINS}
     command: ["server", "/data"]
     volumes:
       - storage-data:/data
@@ -111,15 +137,16 @@ services:
 
   # Runs once against the storage and exits: creates its bucket, so a
   # clean clone needs no manual step -- the same guarantee `migrate` gives
-  # for the schema.
+  # for the schema. Local profile only, same reason as `storage` above.
   storage-init:
+    profiles: ["local"]
     image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     entrypoint: ["/bin/sh", "/init/init.sh"]
     environment:
-      STORAGE_SERVER_ENDPOINT: http://storage:9000
-      STORAGE_ROOT_USER: ${STORAGE_ROOT_USER}
-      STORAGE_ROOT_PASSWORD: ${STORAGE_ROOT_PASSWORD}
-      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      MINIO_SERVER_ENDPOINT: http://storage:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET}
     volumes:
       - ./storage/init.sh:/init/init.sh:ro
     depends_on:
@@ -131,7 +158,12 @@ services:
   # The image transformer. It reads originals from the storage by itself
   # (D2): nothing in this project ever hands it bytes. It publishes no port
   # -- nginx is the only way to reach it (D5), unlike the storage above.
+  # Local profile only, same reason as `storage`: nginx's own /images route
+  # resolves this hostname per-request (nginx.conf), never at startup, so
+  # its absence in the cloud profile is never an error (D5 in
+  # add-media-ports-and-local-adapters, unchanged by this).
   transformer:
+    profiles: ["local"]
     image: darthsim/imgproxy:v4.0.14
     environment:
       IMGPROXY_KEY: ${IMAGE_SIGNING_KEY}
@@ -140,8 +172,8 @@ services:
       IMGPROXY_S3_ENDPOINT: http://storage:9000
       IMGPROXY_S3_REGION: us-east-1
       IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
-      AWS_ACCESS_KEY_ID: ${STORAGE_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${STORAGE_ROOT_PASSWORD}
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
     depends_on:
       storage-init:
         condition: service_completed_successfully

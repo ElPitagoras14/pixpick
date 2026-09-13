@@ -3,16 +3,34 @@ what it discards is invisible to everyone until then (Risks in this
 change's design), so there's no urgency that would justify a schedule.
 
     uv run python -m src.packages.photos.reconcile
+
+Also the migration check a storage provider change relies on (D6 in
+add-cloud-media-adapters): run with `--against` to report which objects a
+destination provider is still missing, instead of discarding anything.
+
+    uv run python -m src.packages.photos.reconcile --against r2
 """
 
 import asyncio
+from enum import StrEnum
+from typing import Annotated
+
+import typer
 
 from src.database.utils import transaction
 from src.log import logger
 from src.loop import loop_factory
 from src.packages.photos import repository
-from src.storage.factory import storage_port
+from src.storage.factory import build_storage_port, storage_port
 from src.storage.port import object_key
+
+
+class Provider(StrEnum):
+    """The storage providers `--against` accepts -- the same values
+    `STORAGE_PROVIDER` does (object-storage spec)."""
+
+    local = "local"
+    r2 = "r2"
 
 
 async def reconcile() -> None:
@@ -37,13 +55,63 @@ async def reconcile() -> None:
     logger.info(f"reconciliation: discarded {len(expired)} expired pending photo(s)")
 
 
-def main() -> None:
+async def check_missing(*, provider: Provider) -> list[str]:
+    """Every available photo's object key that `provider` doesn't have
+    yet (object-storage spec, D6): the check a migration runs before
+    switching the active provider, reusing the same query
+    `confirm_batch` already relies on -- `get_object` -- against a port
+    built for whichever provider is named, never the currently active
+    one, so running this never changes what the running application
+    actually serves from.
+    """
+    target = build_storage_port(provider)
+    async with transaction() as connection:
+        rows = await repository.all_available_photo_keys(connection)
+
+    missing: list[str] = []
+    for row in rows:
+        key = object_key(album_id=str(row.album_id), photo_id=str(row.id))
+        metadata = await target.get_object(object_key=key)
+        if metadata is None:
+            missing.append(key)
+    return missing
+
+
+async def _run(against: Provider | None) -> None:
+    if against is None:
+        await reconcile()
+        return
+
+    missing = await check_missing(provider=against)
+    if not missing:
+        logger.info(f"reconciliation check: every object is already present at {against.value!r}")
+        return
+    logger.warning(f"reconciliation check: {len(missing)} object(s) missing at {against.value!r}:")
+    for key in missing:
+        logger.warning(f"  {key}")
+
+
+app = typer.Typer(add_completion=False)
+
+
+@app.command()
+def main(
+    against: Annotated[
+        Provider | None,
+        typer.Option(
+            help=(
+                "Report objects missing at this provider instead of discarding "
+                "expired uploads (D6 in add-cloud-media-adapters)."
+            )
+        ),
+    ] = None,
+) -> None:
     # psycopg3's async mode can't run on Windows's default event loop
     # (src/loop.py's own docstring); reused here for the same reason
     # uvicorn is given it explicitly, since this command has no uvicorn
     # to do that for it.
-    asyncio.run(reconcile(), loop_factory=loop_factory)
+    asyncio.run(_run(against), loop_factory=loop_factory)
 
 
 if __name__ == "__main__":
-    main()
+    app()

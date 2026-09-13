@@ -49,12 +49,10 @@ async def test_confirming_a_batch_warms_the_rating_variant_in_the_real_edge_cach
     try:
         # The real, direct-to-storage write a browser would perform
         # against the presigned grant (object-storage spec) -- never
-        # through the API.
-        upload_response = httpx.post(
-            grant.url,
-            data=grant.fields,
-            files={"file": ("photo.png", _ONE_PIXEL_PNG, "image/png")},
-        )
+        # through the API. A PUT with the file as the body (D9 in
+        # add-cloud-media-adapters), with the signed headers sent
+        # exactly as granted.
+        upload_response = httpx.put(grant.url, content=_ONE_PIXEL_PNG, headers=grant.headers)
         assert upload_response.status_code < 300
 
         results, warm_up_keys = await photos_service.confirm_batch(

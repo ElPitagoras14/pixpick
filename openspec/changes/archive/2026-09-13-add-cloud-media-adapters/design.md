@@ -37,11 +37,15 @@ El proveedor cloud habla el protocolo del local, así que el adapter comparte el
 
 La afirmación de que "es casi lo mismo" no se acepta por argumento sino por evidencia: la suite de contrato corre contra él sin modificaciones. Si hubiera que ajustar la suite para que pase, lo que falló es el contrato — o el proveedor no sirve.
 
-### D3 - La suite de contrato corre contra el proveedor cloud solo si hay credenciales, y se omite sin ellas
+### D3 - La suite de contrato corre contra el doble y contra el proveedor que esté activo
 
-Correr el contrato contra un proveedor cloud requiere red y credenciales, y `backend-testing` exige que la suite completa pase sin acceso a internet. Las dos cosas se concilian así: el contrato corre siempre contra el doble y contra el proveedor local, y contra el cloud únicamente cuando hay credenciales configuradas; sin ellas esa ejecución se omite de forma visible.
+Correr el contrato contra un proveedor cloud requiere red y credenciales, y `backend-testing` exige que la suite completa pase sin acceso a internet. Las dos cosas se concilian así: el contrato corre siempre contra el doble, y contra el proveedor real que `STORAGE_PROVIDER` nombre en ese momento -- nunca contra los dos reales a la vez.
 
-Omitir no es lo mismo que no tener: la omisión aparece en la salida de la suite, de modo que nadie confunda "no se probó" con "pasó". Y la garantía de que la suite funciona sin internet se mantiene intacta, que era la razón por la que se escribió ese requirement.
+**Corrección durante la implementación.** La primera versión de esta decisión probaba siempre contra `local` y, además, contra `r2` cuando hubiera un segundo juego de credenciales dedicado a la prueba (`R2_TEST_*`), para tener los dos proveedores reales cubiertos en la misma corrida. Se descartó porque duplicaba `STORAGE_ACCESS_KEY_ID`/`STORAGE_SECRET_ACCESS_KEY` bajo otro nombre sin necesidad real: el puerto ya tiene un único conjunto de credenciales activo por diseño (un proveedor activo por entorno), y sostener un segundo juego paralelo solo para las pruebas iba contra esa misma idea. Probar el otro proveedor pasó a ser lo mismo que usarlo: cambiar `STORAGE_*` y correr la suite de nuevo, sin infraestructura de prueba aparte.
+
+**Segunda corrección, sobre la primera.** "Cambiar `STORAGE_*` y correr de nuevo" seguía asumiendo un único juego de credenciales compartido entre los dos proveedores -- lo que en su momento se llamó "un proveedor activo por diseño" resultó ser, mirado de nuevo, la misma clase de problema que `identity` y `images` ya habían resuelto cada una por su cuenta: un campo por proveedor, opcional, validado por la factory solo para el que está activo. Se corrigió así: `MINIO_*` y `R2_*` son grupos de variables enteramente separados (D9), cada uno con sus propias credenciales, bucket y direcciones. Ninguno de los dos es obligatorio en el tipo -- la factory de almacenamiento gana el mismo `MissingCredentialsError` que las otras dos ya tenían, evaluado solo para el proveedor seleccionado.
+
+Esto deja la omisión visible de la primera corrección exactamente donde tenía que estar: no hay "activo sin credenciales" que saltear en la suite porque el proveedor activo por omisión (`local`) tiene su propio grupo completo desde `.env.example`; la garantía de `backend-testing` -- la suite completa pasa sin acceso a internet -- se sostiene con esos valores por omisión. Y de regalo, la comprobación de migración (D6) deja de depender de pisar `STORAGE_*` con los valores del destino antes de correrla: como cada proveedor tiene su propio grupo, nombrar uno explícitamente nunca depende de que sea también el activo.
 
 ### D4 - La base de datos acompaña al conjunto de proveedores, no al modo de ejecución
 
@@ -79,13 +83,25 @@ No hay una rama para eso: son dos valores de configuración que en un perfil dif
 
 El esquema de firma del proveedor cloud es un cálculo criptográfico estándar que la biblioteca del lenguaje ya provee. Sumado a que el adapter de almacenamiento reutiliza el cliente existente, el change no agrega ninguna dependencia — igual que el de identidad cloud.
 
+### D9 - La concesión de subida firma un PUT, no un POST, y el límite de tamaño se verifica después de subir
+
+Implementar el adapter cloud reveló que D2 estaba escrito contra una operación que el proveedor elegido no ofrece: Cloudflare R2 no implementa `POST` presignado con política (el mecanismo que permite condicionar un rango de tamaño en la firma), solo `PUT` presignado — verificado contra su propia documentación y confirmado por la comunidad. Esto no es una particularidad de R2: ningún esquema de firma por query string (el que usa un PUT presignado, en cualquier proveedor S3, incluido AWS mismo) puede expresar una condición de rango; esa capacidad es exclusiva del POST con política, que es justamente la operación que falta.
+
+La consecuencia alcanza al puerto, no solo al adapter: `UploadGrant` traía `fields` pensado para un formulario multipart, y la prueba de contrato `test_the_size_limit_is_enforced_by_the_storage_itself` exige que el almacenamiento rechace un archivo por encima de un tope al recibirlo — una garantía que ningún PUT presignado puede sostener. Sostenerla habría exigido descartar R2 (la razón de producto para elegirlo, sin costo de tráfico de salida, sigue siendo válida) o cambiar a un proveedor que sí ofrezca POST con política — se evaluaron Wasabi (lo soporta, pero sin nivel gratuito permanente) y Backblaze B2 (tampoco lo soporta, mismo problema que R2). Se optó por conservar R2 y corregir la garantía.
+
+La concesión pasa a describir un único `PUT`, con los encabezados que hay que enviar (el `Content-Type` concedido, firmado en la URL). El límite de tamaño deja de imponerlo el almacenamiento al recibir y pasa a verificarlo la aplicación al confirmar, comparando el tamaño real del objeto contra el declarado — mecanismo que `photo-upload` ya exige y que `confirm_batch` ya implementa (rechaza y borra el objeto si no coincide). El adapter local de MinIO migra al mismo mecanismo por la misma razón que motivó D2: si los dos proveedores no comparten la operación, el adapter cloud no es "el mismo cliente con otra configuración", es otra cosa — con los dos en PUT, la afirmación de D2 vuelve a ser literalmente cierta, en vez de asumida.
+
+**Alternativas descartadas:** fijar el tamaño exacto en la firma del PUT (pinning `Content-Length`) en lugar de un rango — se descarta porque el archivo real casi nunca mide exactamente el tope declarado, así que habría rechazado subidas legítimas de cualquier tamaño menor al máximo. Un servicio intermediario (p. ej. un Worker) que reciba el POST del navegador y lo traduzca a un PUT contra R2 — se descarta porque reintroduce un intermediario que retiene bytes de imagen, exactamente lo que los dos puertos existen para evitar (D2 de `add-media-ports-and-local-adapters`).
+
+**Nota sobre D8:** el comando de reconciliación extendido en D6 usa `typer` para su CLI en lugar de la biblioteca estándar (`argparse`), por pedido explícito del usuario. Es la única dependencia que este change agrega -- ya estaba resuelta transitivamente (la trae `fastapi[standard]`), así que pasa a declararse como dependencia directa sin cambiar el lockfile de forma sustancial.
+
 ## Risks / Trade-offs
 
-**Probar contra el proveedor cloud consume red y puede consumir cuota** → Mitigado por D3, que lo vuelve opcional y visible. El riesgo restante es que nadie ejecute nunca esa parte y el adapter cloud quede sin verificar contra el proveedor real; por eso la verificación manual del ciclo completo queda como tarea explícita.
+**Probar contra el proveedor cloud consume red y puede consumir cuota** → Solo ocurre cuando alguien configura `STORAGE_PROVIDER`/`IMAGE_PROVIDER` hacia el cloud y corre la suite en ese estado (D3); el desarrollo cotidiano, con los proveedores locales activos, no toca la red. El riesgo restante es que nadie haga ese cambio nunca y el adapter cloud quede sin verificar contra el proveedor real; por eso la verificación manual del ciclo completo queda como tarea explícita.
 
 **La declaración de orígenes admitidos del proveedor cloud tiene otra interfaz y el mismo modo de falla** → Una subida rechazada por origen falla en el navegador con poca información, igual que en local. Se verifica subiendo desde el navegador contra el proveedor cloud, no solo con pruebas del backend.
 
-**Un proveedor cloud podría no soportar alguna operación del contrato** → Si ocurre, el spec ya dice qué hacer: no se considera utilizable. Lo que no corresponde es ablandar el contrato para que entre, porque el contrato es lo único que sostiene que los adapters sean intercambiables.
+**Un proveedor cloud podría no soportar alguna operación del contrato** → Ocurrió: R2 no soporta POST presignado. A diferencia de una variante de imagen (donde ablandar el contrato no tiene sentido, D1), acá la operación en falta no es exclusiva de R2 -- ningún PUT presignado, en ningún proveedor, puede expresar la misma condición -- así que el hallazgo no señala que R2 no sirva, señala que el contrato asumió una capacidad de un solo mecanismo (POST) sin haber probado el proveedor elegido contra él. Se resolvió en D9 corrigiendo esa garantía en lugar de descartar R2.
 
 **La migración verificada depende de que alguien la ejecute** → El spec la exige como capacidad disponible, no como hábito. La mitigación práctica es que el procedimiento documentado tenga el orden correcto —comprobar antes de cambiar— y que el README lo presente como los pasos del cambio y no como una recomendación.
 
@@ -99,7 +115,7 @@ El rollback es volver las variables a su valor anterior, y funciona mientras el 
 
 ## Open Questions
 
-Ninguna. Las cuatro que aparecieron al escribir el diseño se resolvieron, y una de ellas produjo una corrección en el change de los puertos locales, ya aplicada.
+Ninguna. Las cuatro que aparecieron al escribir el diseño se resolvieron, y una de ellas produjo una corrección en el change de los puertos locales, ya aplicada. Una quinta apareció durante la implementación misma y se resolvió en D9: R2 no soporta POST presignado, así que la concesión pasa a firmar un PUT y el límite de tamaño se verifica al confirmar en lugar de al firmar.
 
 **Resueltas durante la redacción**
 

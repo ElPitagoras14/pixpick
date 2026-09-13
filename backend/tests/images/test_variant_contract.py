@@ -45,9 +45,9 @@ _TEST_IMAGE = base64.b64decode(
 def _direct_client():
     return boto3.client(
         "s3",
-        endpoint_url=storage_settings.storage_server_endpoint,
-        aws_access_key_id=storage_settings.storage_root_user,
-        aws_secret_access_key=storage_settings.storage_root_password,
+        endpoint_url=storage_settings.minio_server_endpoint,
+        aws_access_key_id=storage_settings.minio_access_key_id,
+        aws_secret_access_key=storage_settings.minio_secret_access_key,
         config=Config(signature_version="s3v4"),
     )
 
@@ -60,13 +60,13 @@ def uploaded_object() -> Iterator[str]:
     key = f"albums/contract-test/{uuid.uuid4()}"
     client = _direct_client()
     client.put_object(
-        Bucket=storage_settings.storage_bucket,
+        Bucket=storage_settings.minio_bucket,
         Key=key,
         Body=_TEST_IMAGE,
         ContentType="image/jpeg",
     )
     yield key
-    client.delete_object(Bucket=storage_settings.storage_bucket, Key=key)
+    client.delete_object(Bucket=storage_settings.minio_bucket, Key=key)
 
 
 @pytest.mark.parametrize("variant", list(Variant))

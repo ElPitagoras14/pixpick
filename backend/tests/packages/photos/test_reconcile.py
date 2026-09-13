@@ -29,7 +29,6 @@ async def test_reconcile_discards_expired_pending_photos_and_their_objects(
         album_id=str(album.id),
         photo_id=str(expired.id),
         content_type="image/jpeg",
-        max_size=10,
         ttl_seconds=60,
     )
     fake_storage.upload(target_key=expired_key, size=10, content_type="image/jpeg")

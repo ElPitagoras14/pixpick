@@ -7,5 +7,5 @@
 # per-bucket CORS API for this script to call.
 set -eu
 
-mc alias set target "$STORAGE_SERVER_ENDPOINT" "$STORAGE_ROOT_USER" "$STORAGE_ROOT_PASSWORD"
-mc mb --ignore-existing "target/$STORAGE_BUCKET"
+mc alias set target "$MINIO_SERVER_ENDPOINT" "$MINIO_ACCESS_KEY_ID" "$MINIO_SECRET_ACCESS_KEY"
+mc mb --ignore-existing "target/$MINIO_BUCKET"

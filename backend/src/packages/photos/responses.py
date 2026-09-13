@@ -47,7 +47,7 @@ class PhotoGrantResponse(ApiModel):
     photo_id: UUID
     position: int
     upload_url: str
-    upload_fields: dict[str, str]
+    upload_headers: dict[str, str]
 
     @classmethod
     def from_grant(
@@ -57,7 +57,7 @@ class PhotoGrantResponse(ApiModel):
             photo_id=photo_id,
             position=position,
             upload_url=grant.url,
-            upload_fields=grant.fields,
+            upload_headers=grant.headers,
         )
 
 

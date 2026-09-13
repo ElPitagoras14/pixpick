@@ -11,7 +11,6 @@ from typing import Protocol
 
 import httpx
 
-from src.storage.adapters.minio import MinioStorageAdapter
 from src.storage.port import StoragePort, UploadGrant
 from tests.fakes import FakeStoragePort
 
@@ -59,8 +58,13 @@ class FakeStorageHarness:
 
 
 @dataclass
-class MinioStorageHarness:
-    port: MinioStorageAdapter
+class S3StorageHarness:
+    """Drives whichever real S3-compatible adapter is active (D9 in
+    add-cloud-media-adapters): the same PUT-and-headers logic below is
+    all any of them needs, since what differs between them is client
+    configuration, never this."""
+
+    port: StoragePort
     created_keys: list[str] = field(default_factory=list)
 
     def upload(
@@ -71,12 +75,16 @@ class MinioStorageHarness:
         content_type: str = "image/jpeg",
         target_key: str | None = None,
     ) -> int:
+        # `target_key` exercises "a grant doesn't authorize writing a
+        # different object" (object-storage spec): a PUT is signed
+        # against its own URL path, which already names the object, so
+        # writing to a different key means requesting a different URL
+        # entirely -- there's no separate field to override (D9 in
+        # add-cloud-media-adapters).
         key = target_key or grant.object_key
-        fields = dict(grant.fields)
-        if target_key is not None:
-            fields["key"] = target_key
+        url = grant.url.replace(grant.object_key, key) if target_key is not None else grant.url
         content = b"\xff" * size
-        response = httpx.post(grant.url, data=fields, files={"file": (key, content, content_type)})
+        response = httpx.put(url, content=content, headers=grant.headers)
         if response.status_code < 300:
             self.created_keys.append(key)
         return response.status_code
