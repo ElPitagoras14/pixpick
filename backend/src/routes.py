@@ -28,3 +28,7 @@ if identity_settings.identity_provider == "local":
     from src.identity.adapters.local import router as local_dev_login_router
 
     api_router.include_router(local_dev_login_router)
+elif identity_settings.identity_provider == "google":
+    from src.identity.adapters.google import router as google_callback_router
+
+    api_router.include_router(google_callback_router)
