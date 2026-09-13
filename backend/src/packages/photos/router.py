@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -12,15 +12,17 @@ from src.packages.albums.schemas import AlbumDetailRow, AlbumRecord
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
 from src.packages.photos import service
-from src.packages.photos.config import MAX_BATCH_SIZE
-from src.packages.photos.responses import (
+from src.responses import Envelope
+
+from .config import MAX_BATCH_SIZE
+from .responses import (
     ConfirmationResultResponse,
+    GalleryResponse,
     PhotoGrantResponse,
     PhotoResponse,
 )
-from src.packages.photos.schemas import GrantFileInput
-from src.packages.photos.warmup import warm_up_variants
-from src.responses import Envelope
+from .schemas import GrantFileInput, RatingFilter
+from .warmup import warm_up_variants
 
 router = APIRouter(prefix="/albums/{album_id}/photos")
 
@@ -61,6 +63,25 @@ async def list_photos(
 ) -> Envelope[list[PhotoResponse]]:
     rows = await service.list_photos(connection, album_id=album.id)
     return Envelope(data=[PhotoResponse.from_row(row, album_id=album.id) for row in rows])
+
+
+@router.get("/gallery")
+async def get_gallery(
+    # A closed set of four values (rating-gallery spec): an out-of-set
+    # value is a malformed request from something other than this
+    # project's own frontend, which never sends one -- its own route
+    # already resolved an unrecognized filter to the default before this
+    # was ever called (D9). This dependency SHALL NOT be leniently
+    # coerced the same way.
+    rating_filter: RatingFilter = Query("all", alias="filter"),
+    album: AlbumDetailRow = Depends(get_accessible_album),
+    user: UserRecord = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> Envelope[GalleryResponse]:
+    result = await service.get_gallery(
+        connection, album_id=album.id, user_id=user.id, rating_filter=rating_filter
+    )
+    return Envelope(data=GalleryResponse.from_result(result, album_id=album.id))
 
 
 @router.post("/grants")

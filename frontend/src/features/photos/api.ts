@@ -6,6 +6,10 @@ import {
 
 import { type ApiEnvelope, api, unwrapApiError } from "@/api";
 import { albumsQueryOptions } from "@/features/albums/api";
+import {
+	albumStatsQueryOptions,
+	galleryQueryKeyPrefix,
+} from "@/features/gallery/api";
 
 export interface Photo {
 	id: string;
@@ -107,9 +111,17 @@ export function useDeletePhoto(albumId: string) {
 		mutationFn: deletePhoto,
 		onSuccess: () => {
 			// A deleted photo can change the album's cover and count too
-			// (album-management spec), not only its own grid.
+			// (album-management spec), not only its own grid -- and, now
+			// that the grid is the gallery (rating-gallery spec), every one
+			// of its filters and their counts.
 			queryClient.invalidateQueries({
 				queryKey: photosQueryOptions(albumId).queryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: galleryQueryKeyPrefix(albumId),
+			});
+			queryClient.invalidateQueries({
+				queryKey: albumStatsQueryOptions(albumId).queryKey,
 			});
 			queryClient.invalidateQueries({
 				queryKey: albumsQueryOptions().queryKey,

@@ -3,8 +3,9 @@ from uuid import UUID
 from src.images.factory import image_port
 from src.images.port import Variant
 from src.models import ApiModel
-from src.packages.ratings.schemas import PendingPhotoRow, RatingRecord
 from src.storage.port import object_key
+
+from .schemas import AlbumStats, PendingPhotoRow, PhotoStats, RatingRecord
 
 
 class PendingPhotoResponse(ApiModel):
@@ -39,3 +40,40 @@ class RatingResponse(ApiModel):
     @classmethod
     def from_record(cls, rating: RatingRecord) -> "RatingResponse":
         return cls(photo_id=rating.photo_id, approved=rating.approved)
+
+
+class PhotoStatsResponse(ApiModel):
+    """One photo's aggregate (album-stats spec): counts only, never who
+    cast them -- there is no field here that could attribute a rating to
+    a particular person."""
+
+    photo_id: UUID
+    approved_count: int
+    rejected_count: int
+
+    @classmethod
+    def from_stats(cls, stats: PhotoStats) -> "PhotoStatsResponse":
+        return cls(
+            photo_id=stats.photo_id,
+            approved_count=stats.approved_count,
+            rejected_count=stats.rejected_count,
+        )
+
+
+class AlbumStatsResponse(ApiModel):
+    """The owner-only resource (album-stats spec): every available
+    photo's counts, plus a summary whose total always equals their sum
+    (D3), computed fresh on every request (task 2.7) rather than served
+    from anything stored."""
+
+    photos: list[PhotoStatsResponse]
+    participant_count: int
+    rating_count: int
+
+    @classmethod
+    def from_stats(cls, stats: AlbumStats) -> "AlbumStatsResponse":
+        return cls(
+            photos=[PhotoStatsResponse.from_stats(photo) for photo in stats.photos],
+            participant_count=stats.participant_count,
+            rating_count=stats.rating_count,
+        )

@@ -9,6 +9,13 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+# The four ways the gallery can be sliced, and the one lo-pendiente
+# consumes (rating-gallery spec): "all" is every available photo, the
+# other three partition it. Shared by `repository.list_photos_with_rating`
+# so the rating sequence, the pending counter and the gallery can never
+# each define "pending" or "rejected" their own way (D1).
+RatingFilter = Literal["all", "approved", "rejected", "unrated"]
+
 
 class PhotoRecord(BaseModel):
     id: UUID
@@ -50,3 +57,34 @@ class ConfirmationOutcome(BaseModel):
 
     photo_id: UUID
     status: Literal["available", "rejected", "pending"]
+
+
+class PhotoWithRatingRow(BaseModel):
+    """One row of the single query behind the rating sequence, the
+    pending counter and the gallery's four filters (D1, rating-gallery
+    spec): an available photo of the album, together with the rating --
+    if any -- that one particular person gave it. `approved` is `None`
+    exactly when unrated, never a stand-in for a rejection (photo-rating
+    spec: the two SHALL NOT collapse into one)."""
+
+    id: UUID
+    position: int
+    width: int | None = None
+    height: int | None = None
+    approved: bool | None = None
+
+
+class GalleryCounts(BaseModel):
+    """The four counts the gallery always returns, whatever filter was
+    asked for (D2): computed once, in the same pass that also selects
+    the requested slice -- never four separate queries."""
+
+    total: int
+    approved: int
+    rejected: int
+    unrated: int
+
+
+class GalleryResult(BaseModel):
+    photos: list[PhotoWithRatingRow]
+    counts: GalleryCounts
