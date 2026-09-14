@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.exceptions import NotFoundError
 from src.packages.photos import repository as photos_repository
-from src.packages.ratings import repository
 
+from . import repository
 from .schemas import AlbumStats, PendingPhotoRow, PhotoStats, RatingRecord
 
 

@@ -1,6 +1,5 @@
-from src.images.adapters.imagekit import ImageKitAdapter
-from src.images.adapters.imgproxy import ImgproxyAdapter
-
+from .adapters.imagekit import ImageKitAdapter
+from .adapters.imgproxy import ImgproxyAdapter
 from .config import images_settings
 from .port import ImagePort
 

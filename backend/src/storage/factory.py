@@ -1,6 +1,5 @@
-from src.storage.adapters.minio import MinioStorageAdapter
-from src.storage.adapters.r2 import R2StorageAdapter
-
+from .adapters.minio import MinioStorageAdapter
+from .adapters.r2 import R2StorageAdapter
 from .config import storage_settings
 from .port import StoragePort
 

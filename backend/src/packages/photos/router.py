@@ -11,9 +11,9 @@ from src.packages.albums.dependencies import get_accessible_album, get_owned_alb
 from src.packages.albums.schemas import AlbumDetailRow, AlbumRecord
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
-from src.packages.photos import service
 from src.responses import Envelope
 
+from . import service
 from .config import MAX_BATCH_SIZE
 from .responses import (
     ConfirmationResultResponse,

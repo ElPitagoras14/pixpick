@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<head><title>Local development sign-in</title></head>
+<body>
+  <h1>Local development sign-in</h1>
+  <p>No password: whatever you enter here becomes the signed-in identity.</p>
+  <form method="post" action="/api/auth/local/dev-login">
+    <input type="hidden" name="state" value="{{ state }}">
+    <label>Email <input type="email" name="email" value="dev@example.com" required></label><br>
+    <label>Name <input type="text" name="name" value="Dev User"></label><br>
+    <button type="submit">Continue</button>
+  </form>
+</body>
+</html>

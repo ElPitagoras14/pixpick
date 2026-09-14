@@ -5,10 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.dependencies import get_connection
 from src.exceptions import NotFoundError
-from src.packages.albums import repository, service
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
 
+from . import repository, service
 from .schemas import AlbumDetailRow, AlbumRecord
 
 

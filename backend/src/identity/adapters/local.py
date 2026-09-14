@@ -1,13 +1,25 @@
 import secrets
+from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from src.identity.exceptions import InvalidCodeError
 from src.identity.port import ExternalIdentity
 
 router = APIRouter()
+
+# Resolved from this module's own location instead of the working
+# directory, so the screen is served the same way from the repository and
+# from the image, which copies `src` whole (D5). Autoescaping is what
+# keeps a `state` written on purpose from closing its attribute and
+# adding markup of its own (D6).
+_templates = Environment(
+    loader=FileSystemLoader(Path(__file__).parent / "templates"),
+    autoescape=select_autoescape(["html"]),
+)
 
 # One-time codes, kept in memory: acceptable only because this adapter
 # refuses to run outside development (D2, enforced by the factory) and
@@ -23,20 +35,7 @@ async def dev_login_screen(state: str) -> HTMLResponse:
     point of view this is an external place it's sent to and returns
     from, exactly like Google will be.
     """
-    return HTMLResponse(f"""<!doctype html>
-<html>
-<head><title>Local development sign-in</title></head>
-<body>
-  <h1>Local development sign-in</h1>
-  <p>No password: whatever you enter here becomes the signed-in identity.</p>
-  <form method="post" action="/api/auth/local/dev-login">
-    <input type="hidden" name="state" value="{state}">
-    <label>Email <input type="email" name="email" value="dev@example.com" required></label><br>
-    <label>Name <input type="text" name="name" value="Dev User"></label><br>
-    <button type="submit">Continue</button>
-  </form>
-</body>
-</html>""")
+    return HTMLResponse(_templates.get_template("dev_login.html").render(state=state))
 
 
 @router.post("/auth/local/dev-login")

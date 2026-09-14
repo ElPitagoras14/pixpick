@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from src.config import settings
 from src.database.dependencies import get_connection
 from src.identity.factory import auth_port
-from src.packages.auth import service
 from src.responses import Envelope
 
+from . import service
 from .config import (
     AUTH_COOKIE_PATH,
     RETURN_TO_COOKIE_NAME,

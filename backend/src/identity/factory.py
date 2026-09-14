@@ -1,8 +1,8 @@
 from src.config import settings
-from src.identity.adapters.google import GoogleAuthAdapter, google_redirect_uri
-from src.identity.adapters.local import LocalAuthAdapter
 from src.log import logger
 
+from .adapters.google import GoogleAuthAdapter, google_redirect_uri
+from .adapters.local import LocalAuthAdapter
 from .config import identity_settings
 from .port import AuthPort
 

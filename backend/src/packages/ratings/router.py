@@ -9,9 +9,9 @@ from src.packages.albums.dependencies import get_accessible_album, get_owned_alb
 from src.packages.albums.schemas import AlbumDetailRow, AlbumRecord
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
-from src.packages.ratings import service
 from src.responses import Envelope
 
+from . import service
 from .responses import AlbumStatsResponse, PendingPhotoResponse, RatingResponse
 
 # Rating is open to any member, not only the owner (photo-rating spec):

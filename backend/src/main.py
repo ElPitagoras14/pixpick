@@ -4,9 +4,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
-from src.database.client import check_connectivity, dispose_engine
-
 from .config import settings
+from .database.client import check_connectivity, dispose_engine
 from .handlers import register_exception_handlers
 from .log import logger
 from .loop import loop_factory
