@@ -32,6 +32,13 @@ class FakeStoragePort:
         self._grants: dict[str, _PendingGrant] = {}
         self._objects: dict[str, _StoredObject] = {}
 
+    async def ensure_ready(self) -> None:
+        """Nothing to create: this storage's space is the dictionary
+        above, which exists from the moment the double does. It's still
+        here, and still idempotent, because the contract suite calls it
+        against this double exactly as it does against a real provider.
+        """
+
     def grant_upload(
         self,
         *,

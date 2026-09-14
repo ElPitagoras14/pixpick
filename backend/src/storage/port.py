@@ -39,11 +39,25 @@ class ObjectMetadata(BaseModel):
 
 
 class StoragePort(Protocol):
-    """The three operations any object storage provider offers
-    (object-storage spec). Deliberately missing a fourth that reads
-    content: the transformer reads originals from the storage on its own,
-    and no other consumer has a reason to hold an image in memory.
+    """The four operations any object storage provider offers
+    (object-storage spec). Deliberately missing one that reads content:
+    the transformer reads originals from the storage on its own, and no
+    other consumer has a reason to hold an image in memory.
     """
+
+    async def ensure_ready(self) -> None:
+        """Leaves the space this project keeps its objects in ready to
+        receive them, so nothing else has to create it (D1). Called once
+        at startup, through the port, so the caller never asks which
+        provider is active.
+
+        A provider this project runs itself creates the space when it is
+        missing; a provider this project only consumes checks that it is
+        there and raises `StorageNotReadyError` when it is not (D2, D3).
+        Repeating it on a space that is already there SHALL succeed and
+        SHALL NOT touch what it holds.
+        """
+        ...
 
     def grant_upload(
         self,

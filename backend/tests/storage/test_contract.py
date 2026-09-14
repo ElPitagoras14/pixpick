@@ -102,3 +102,28 @@ async def test_several_objects_are_deleted_in_one_operation(storage_harness):
 
     for key in keys:
         assert await storage_harness.port.get_object(object_key=key) is None
+
+
+async def test_preparing_the_storage_leaves_it_ready_and_repeating_it_changes_nothing(
+    storage_harness,
+):
+    """Both halves of the guarantee in one body: after the call the space
+    takes objects, and calling it again neither fails nor touches what it
+    already holds."""
+    await storage_harness.port.ensure_ready()
+
+    album_id, photo_id = _domain_ids()
+    grant = storage_harness.port.grant_upload(
+        album_id=album_id,
+        photo_id=photo_id,
+        content_type="image/jpeg",
+        ttl_seconds=60,
+    )
+    status = storage_harness.upload(grant, size=100)
+    assert status < 300
+
+    await storage_harness.port.ensure_ready()
+
+    metadata = await storage_harness.port.get_object(object_key=grant.object_key)
+    assert metadata is not None
+    assert metadata.size == 100
