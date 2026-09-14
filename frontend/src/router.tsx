@@ -4,7 +4,7 @@ import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { onUnauthorized } from "@/api";
 import { sessionQueryOptions } from "@/features/auth/api";
 
-import { routeTree } from "./routeTree.gen";
+import { routeTree } from "@/routeTree.gen";
 
 export function getRouter() {
 	const queryClient = new QueryClient();

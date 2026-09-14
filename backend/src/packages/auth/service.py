@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.identity.port import ExternalIdentity
-from src.packages.auth import repository
 
+from . import repository
 from .config import SESSION_LIFETIME
 from .schemas import UserRecord
 from .security import generate_session_token, hash_session_token

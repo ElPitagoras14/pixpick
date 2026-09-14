@@ -7,7 +7,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { config } from "@/config";
 import { sessionQueryOptions } from "@/features/auth/api";
 
-import "../styles.css";
+import "@/styles.css";
 
 interface RouterContext {
 	queryClient: QueryClient;

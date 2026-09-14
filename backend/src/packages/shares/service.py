@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from src.config import settings
 from src.exceptions import NotFoundError
 from src.packages.albums import repository as albums_repository
-from src.packages.shares import repository
 
+from . import repository
 from .security import generate_share_token
 
 

@@ -6,9 +6,9 @@ from src.packages.albums.dependencies import get_owned_album
 from src.packages.albums.schemas import AlbumRecord
 from src.packages.auth.dependencies import get_current_user
 from src.packages.auth.schemas import UserRecord
-from src.packages.shares import service
 from src.responses import Envelope
 
+from . import service
 from .responses import EnterShareResponse, ShareLinkResponse
 
 # Administering the link: generating, regenerating, revoking. Owner-only

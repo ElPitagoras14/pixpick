@@ -14,6 +14,7 @@ dependencies = [
     "boto3>=1.43.93",
     "fastapi[standard]>=0.141.1",
     "httpx>=0.28.1",
+    "jinja2>=3.1.6",
     "loguru>=0.7.3",
     "psycopg[binary]>=3.3.5",
     "pydantic>=2.13.5",
@@ -42,7 +43,14 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Half of the import convention (code-conventions spec): a relative import
+# never climbs to a parent package. The other half — a module inside the
+# file's own subtree is imported relatively — has no lint rule and is
+# covered by tests/test_code_conventions.py.
+ban-relative-imports = "parents"
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's dependency-injection idiom: `Depends(...)`, `Cookie(...)`, and

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from src.database import client as _client_module
+from . import client as _client_module
 
 
 @asynccontextmanager

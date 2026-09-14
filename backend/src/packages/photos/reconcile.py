@@ -20,9 +20,10 @@ import typer
 from src.database.utils import transaction
 from src.log import logger
 from src.loop import loop_factory
-from src.packages.photos import repository
 from src.storage.factory import build_storage_port, storage_port
 from src.storage.port import object_key
+
+from . import repository
 
 
 class Provider(StrEnum):

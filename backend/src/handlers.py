@@ -5,9 +5,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.identity.exceptions import InvalidCodeError
-from src.packages.auth.exceptions import InvalidStateError
-
 from .exceptions import (
     DatabaseError,
     ForbiddenError,
@@ -16,7 +13,9 @@ from .exceptions import (
     UnauthenticatedError,
     ValidationFailedError,
 )
+from .identity.exceptions import InvalidCodeError
 from .log import logger
+from .packages.auth.exceptions import InvalidStateError
 from .responses import error_envelope
 
 

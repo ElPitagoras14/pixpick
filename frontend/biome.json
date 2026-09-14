@@ -25,7 +25,15 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"style": {
+				"noRestrictedImports": {
+					"level": "error",
+					"options": {
+						"patterns": [{ "group": ["./*", "../*"] }]
+					}
+				}
+			}
 		}
 	},
 	"javascript": {

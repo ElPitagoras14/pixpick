@@ -1,3 +1,4 @@
+from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -50,3 +51,42 @@ async def test_a_code_cannot_be_exchanged_twice():
 
     with pytest.raises(InvalidCodeError):
         await adapter.exchange_code(code=code)
+
+
+class _Markup(HTMLParser):
+    """Collects the page's shape -- the tags it opens -- and whatever the
+    form carries as `state`, which is the only value the address decides.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tags: list[str] = []
+        self.state_values: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.tags.append(tag)
+        attributes = dict(attrs)
+        if attributes.get("name") == "state":
+            self.state_values.append(attributes.get("value") or "")
+
+
+def _parse(html: str) -> _Markup:
+    parser = _Markup()
+    parser.feed(html)
+    return parser
+
+
+async def test_a_state_with_markup_characters_reaches_the_page_as_text():
+    """The address is what decides `state`, so a value written on purpose
+    must not be able to close the attribute it lands in and add markup of
+    its own (code-conventions spec, D6).
+    """
+    hostile = '"><script>alert("x")</script><input name="evil'
+
+    page = _client().get("/api/auth/local/dev-login", params={"state": hostile}).text
+    benign = _client().get("/api/auth/local/dev-login", params={"state": "plain"}).text
+
+    parsed = _parse(page)
+    assert parsed.state_values == [hostile], "the form no longer carries the state it received"
+    assert parsed.tags == _parse(benign).tags, "the value added or closed an element"
+    assert "<script>" not in page

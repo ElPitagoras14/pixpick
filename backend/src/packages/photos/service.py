@@ -7,10 +7,10 @@ from src.database.utils import transaction
 from src.exceptions import NotFoundError, StateConflictError, ValidationFailedError
 from src.packages.albums import repository as albums_repository
 from src.packages.albums import service as albums_service
-from src.packages.photos import repository
 from src.storage.factory import storage_port
 from src.storage.port import UploadGrant, object_key
 
+from . import repository
 from .config import (
     ALLOWED_CONTENT_TYPES,
     MAX_FILE_SIZE,
