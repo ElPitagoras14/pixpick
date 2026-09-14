@@ -5,12 +5,15 @@ from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from src.storage.config import storage_settings
-from src.storage.exceptions import StorageUnavailableError
+from src.storage.exceptions import StorageNotReadyError, StorageUnavailableError
 from src.storage.port import ObjectMetadata, UploadGrant, object_key
 
 # S3-compatible providers reject a v2-signed request; MinIO and Cloudflare
 # R2 both require v4.
 _SIGNATURE_VERSION = "s3v4"
+
+# What the S3 protocol answers when the bucket itself isn't there.
+_MISSING_BUCKET_CODES = ("404", "NoSuchBucket")
 
 # R2 has no regions of its own; this is the literal value its S3 API
 # expects in every request, regardless of where the bucket's data
@@ -46,6 +49,24 @@ class R2StorageAdapter:
         self._browser_client = _client()
         self._server_client = _client()
         self._bucket = storage_settings.r2_bucket
+
+    async def ensure_ready(self) -> None:
+        """Checks, never creates (D2). This bucket is created once at the
+        provider itself, so its absence is a configuration error -- and
+        answering it by creating a paid resource on its own is not this
+        application's call. A missing one gets its own error (D3), since
+        it's fixed at the provider and not by looking at the network.
+        """
+        try:
+            await asyncio.to_thread(self._server_client.head_bucket, Bucket=self._bucket)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in _MISSING_BUCKET_CODES:
+                raise StorageNotReadyError(
+                    f"the object storage has no space named {self._bucket!r}"
+                ) from exc
+            raise StorageUnavailableError("could not reach the object storage") from exc
+        except BotoCoreError as exc:
+            raise StorageUnavailableError("could not reach the object storage") from exc
 
     def grant_upload(
         self,

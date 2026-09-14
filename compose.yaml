@@ -34,10 +34,8 @@ services:
   # string is assembled here from the same Postgres server values instead of
   # being written by hand (D7). Bakes the pinned dbmate version and the
   # project's migrations into its image -- see dbmate/Dockerfile. `up`, not
-  # `migrate` (D4 in add-cloud-media-adapters): POSTGRES_DB names a
-  # different database per provider set, and the first time a given one is
-  # used it doesn't exist yet -- `up` creates it before migrating, exactly
-  # as `migrate` alone would for a database that already does, so this is
+  # `migrate`: the database the connection string names may not exist yet
+  # the first time it is used, and `up` creates it before migrating --
   # a no-op every other time.
   migrate:
     image: ghcr.io/elpitagoras14/pixpick-migrate:latest
@@ -60,20 +58,12 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       PUBLIC_URL: ${PUBLIC_URL}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER}
-      # Both providers' groups, unconditionally (D9 in
-      # add-cloud-media-adapters) -- same as GOOGLE_CLIENT_ID/SECRET above:
-      # only STORAGE_PROVIDER's value decides which one the backend
-      # actually reads, so the other sits here unused rather than branched
-      # around.
       MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
       MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET}
       MINIO_BROWSER_ENDPOINT: ${MINIO_BROWSER_ENDPOINT}
-      # Containers mode reaches MinIO by its service name; the native
-      # default in .env.example is the host-published port instead (D4 in
-      # add-media-ports-and-local-adapters) -- unconditional, unlike before
-      # this change, since it's simply unused while a cloud provider is
-      # active (D9 in add-cloud-media-adapters).
+      # Composed here, never taken from .env: this is the address the
+      # services reach each other by inside this network.
       MINIO_SERVER_ENDPOINT: http://storage:9000
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
@@ -91,8 +81,8 @@ services:
       # Only present in the local profile (D1 in add-cloud-media-adapters):
       # `required: false` means this is simply skipped, not an error, when
       # the cloud profile leaves it out of the resolved project entirely.
-      storage-init:
-        condition: service_completed_successfully
+      storage:
+        condition: service_healthy
         required: false
     networks:
       - pixpick
@@ -117,12 +107,10 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY}
-      # MinIO has no per-bucket CORS API -- PutBucketCors is a permanent
-      # no-op on its server (verified against its source: every bucket-CORS
-      # handler always answers NotImplemented). Origins are declared here
-      # instead, server-wide, which is exactly as precise as a per-bucket
-      # policy given this project has a single bucket (D3, D9 in
-      # add-media-ports-and-local-adapters).
+      # Declared on the server, not on the bucket: MinIO has no working
+      # per-bucket CORS API -- PutBucketCors always answers NotImplemented
+      # -- and with a single bucket the two are equally precise anyway
+      # (D3, D9 in add-media-ports-and-local-adapters).
       MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_ALLOWED_ORIGINS}
     command: ["server", "/data"]
     volumes:
@@ -132,26 +120,6 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
-    networks:
-      - pixpick
-
-  # Runs once against the storage and exits: creates its bucket, so a
-  # clean clone needs no manual step -- the same guarantee `migrate` gives
-  # for the schema. Local profile only, same reason as `storage` above.
-  storage-init:
-    profiles: ["local"]
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
-    entrypoint: ["/bin/sh", "/init/init.sh"]
-    environment:
-      MINIO_SERVER_ENDPOINT: http://storage:9000
-      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
-      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
-      MINIO_BUCKET: ${MINIO_BUCKET}
-    volumes:
-      - ./storage/init.sh:/init/init.sh:ro
-    depends_on:
-      storage:
-        condition: service_healthy
     networks:
       - pixpick
 
@@ -175,8 +143,8 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
     depends_on:
-      storage-init:
-        condition: service_completed_successfully
+      storage:
+        condition: service_healthy
     networks:
       - pixpick
 

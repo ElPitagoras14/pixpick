@@ -3,10 +3,12 @@ import typing
 from src.storage.port import StoragePort, object_key
 
 
-def test_the_port_has_exactly_the_three_operations_and_none_reads_content():
-    """No fourth operation returns bytes (D2): the transformer reads
-    originals from the storage on its own."""
+def test_the_port_has_exactly_the_four_operations_and_none_reads_content():
+    """No operation returns bytes (D2): the transformer reads originals
+    from the storage on its own. Preparing the storage is one of them,
+    so the startup that calls it never names a provider."""
     assert typing.get_protocol_members(StoragePort) == {
+        "ensure_ready",
         "grant_upload",
         "get_object",
         "delete_objects",

@@ -12,6 +12,13 @@ from src.storage.port import ObjectMetadata, UploadGrant, object_key
 # R2 both require v4.
 _SIGNATURE_VERSION = "s3v4"
 
+# What the S3 protocol answers when the bucket itself isn't there.
+_MISSING_BUCKET_CODES = ("404", "NoSuchBucket")
+
+# What it answers when something created the bucket between this process's
+# own check and its own create call.
+_ALREADY_CREATED_CODES = ("BucketAlreadyOwnedByYou", "BucketAlreadyExists")
+
 
 def _client(endpoint: str):
     return boto3.client(
@@ -33,6 +40,36 @@ class MinioStorageAdapter:
         self._browser_client = _client(storage_settings.minio_browser_endpoint)
         self._server_client = _client(storage_settings.minio_server_endpoint)
         self._bucket = storage_settings.minio_bucket
+
+    async def ensure_ready(self) -> None:
+        """Creates the bucket when it's missing (D2). This is the
+        provider the project runs itself, so creating its bucket is the
+        project's own job -- the same guarantee `migrate` gives the
+        schema.
+        """
+        if await self._bucket_exists():
+            return
+        try:
+            await asyncio.to_thread(self._server_client.create_bucket, Bucket=self._bucket)
+        except ClientError as exc:
+            # Something else created it between the check above and this
+            # call: the space is ready, which is all this promises.
+            if exc.response.get("Error", {}).get("Code") in _ALREADY_CREATED_CODES:
+                return
+            raise StorageUnavailableError("could not prepare the object storage") from exc
+        except BotoCoreError as exc:
+            raise StorageUnavailableError("could not prepare the object storage") from exc
+
+    async def _bucket_exists(self) -> bool:
+        try:
+            await asyncio.to_thread(self._server_client.head_bucket, Bucket=self._bucket)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in _MISSING_BUCKET_CODES:
+                return False
+            raise StorageUnavailableError("could not reach the object storage") from exc
+        except BotoCoreError as exc:
+            raise StorageUnavailableError("could not reach the object storage") from exc
+        return True
 
     def grant_upload(
         self,

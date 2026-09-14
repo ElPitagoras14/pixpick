@@ -10,6 +10,7 @@ from .handlers import register_exception_handlers
 from .log import logger
 from .loop import loop_factory
 from .routes import api_router
+from .storage.factory import storage_port
 
 
 @asynccontextmanager
@@ -18,6 +19,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # explicit error instead of letting the process serve requests that
     # would fail against the database anyway (database-access spec).
     await check_connectivity()
+    # Not caught either (D1): the space the objects live in has to be
+    # there before the first request, and a storage that can't be left
+    # ready fails startup naming the problem instead of letting the first
+    # upload discover it (object-storage spec).
+    await storage_port.ensure_ready()
     yield
     await dispose_engine()
 
