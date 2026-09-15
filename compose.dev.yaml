@@ -1,72 +1,171 @@
+# The development declaration of the environment: it builds the project's
+# own four images (migrate, backend, frontend, nginx) from source instead
+# of pulling them, and it publishes to the host the ports a developer
+# needs. It is complete on its own and is never combined with another
+# file:
+#
+#   docker compose -f compose.dev.yaml up --build
+#
+# `--build` after a source change, or the image built earlier serves
+# instead. compose.yaml is the other declaration, the one that consumes
+# published images; the two describe the same seven services and differ
+# only in where each image comes from and which ports are published.
 services:
-  # Builds from source instead of the `image:` compose.yaml declares (its
-  # own top comment has the reasoning) -- add `--build` to `docker compose
-  # up` after a source change, or a stale local image serves instead.
-  nginx:
-    build:
-      context: ./nginx
-    ports:
-      - "${NGINX_PORT}:80"
-
-  # Published only so a database client on the host can inspect it (D7);
-  # nothing in this change connects to it yet.
   postgres:
+    image: postgres:18.6
     ports:
       - "${POSTGRES_PORT}:5432"
     environment:
-      - POSTGRES_USER
-      - POSTGRES_PASSWORD
-      - POSTGRES_DB
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # A single mount at /var/lib/postgresql, not .../data: the postgres 18+
+    # image lays out its major-version-specific data directory underneath
+    # this path (pg_ctlcluster-style) and refuses to start otherwise.
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks:
+      - pixpick
 
-  # Published because the browser writes to it directly (D3, D4); the
-  # transformer is not published, it is only ever reached through nginx.
-  storage:
-    ports:
-      - "${MINIO_PORT}:9000"
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY_ID}
-      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_ACCESS_KEY}
-      - MINIO_API_CORS_ALLOW_ORIGIN=${MINIO_ALLOWED_ORIGINS}
-
-  transformer:
-    environment:
-      - IMGPROXY_KEY=${IMAGE_SIGNING_KEY}
-      - IMGPROXY_SALT=${IMAGE_SIGNING_SALT}
-      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_ACCESS_KEY}
-
+  # Runs once, applies pending migrations, and exits (D6). Its connection
+  # string is assembled here from the same Postgres server values instead of
+  # being written by hand (D7). Bakes the pinned dbmate version and the
+  # project's migrations into its image -- see dbmate/Dockerfile. `up`, not
+  # `migrate`: the database the connection string names may not exist yet
+  # the first time it is used, and `up` creates it before migrating --
+  # a no-op every other time.
   migrate:
     build:
       context: ./dbmate
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    command: ["--no-dump-schema", "up"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pixpick
 
   backend:
     build:
       context: ./backend
     environment:
-      - ENVIRONMENT
-      - IDENTITY_PROVIDER
-      - GOOGLE_CLIENT_ID
-      - GOOGLE_CLIENT_SECRET
-      - PUBLIC_URL
-      - STORAGE_PROVIDER
-      - MINIO_ACCESS_KEY_ID
-      - MINIO_SECRET_ACCESS_KEY
-      - MINIO_BUCKET
-      - MINIO_BROWSER_ENDPOINT
-      - R2_ACCESS_KEY_ID
-      - R2_SECRET_ACCESS_KEY
-      - R2_BUCKET
-      - R2_ENDPOINT
-      - IMAGE_PROVIDER
-      - IMAGE_SIGNING_KEY
-      - IMAGE_SIGNING_SALT
-      - IMAGEKIT_URL_ENDPOINT
-      - IMAGEKIT_PRIVATE_KEY
-      - ALBUM_MAX_PHOTOS
+      ENVIRONMENT: ${ENVIRONMENT}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      PUBLIC_URL: ${PUBLIC_URL}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER}
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_BROWSER_ENDPOINT: ${MINIO_BROWSER_ENDPOINT}
+      # Composed here, never taken from .env: this is the address the
+      # services reach each other by inside this network.
+      MINIO_SERVER_ENDPOINT: http://storage:9000
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER}
+      IMAGE_SIGNING_KEY: ${IMAGE_SIGNING_KEY}
+      IMAGE_SIGNING_SALT: ${IMAGE_SIGNING_SALT}
+      IMAGEKIT_URL_ENDPOINT: ${IMAGEKIT_URL_ENDPOINT}
+      IMAGEKIT_PRIVATE_KEY: ${IMAGEKIT_PRIVATE_KEY}
+      ALBUM_MAX_PHOTOS: ${ALBUM_MAX_PHOTOS}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage:
+        condition: service_healthy
+    networks:
+      - pixpick
 
   frontend:
     build:
       context: ./frontend
     environment:
-      - ENVIRONMENT
-      - API_BASE_URL
+      ENVIRONMENT: ${ENVIRONMENT}
+      API_BASE_URL: ${API_BASE_URL}
+    networks:
+      - pixpick
+
+  # The object storage. The browser writes to it directly (D3 in
+  # add-media-ports-and-local-adapters), so unlike every other service here
+  # it is meant to be reached from outside the Docker network too, and this
+  # file publishes its port. Declared whether or not STORAGE_PROVIDER names
+  # it: which provider the application talks to is decided by that variable,
+  # never by which containers are up.
+  storage:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    ports:
+      - "${MINIO_PORT}:9000"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY}
+      # Declared on the server, not on the bucket: MinIO has no working
+      # per-bucket CORS API -- PutBucketCors always answers NotImplemented
+      # -- and with a single bucket the two are equally precise anyway
+      # (D3, D9 in add-media-ports-and-local-adapters).
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_ALLOWED_ORIGINS}
+    command: ["server", "/data"]
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks:
+      - pixpick
+
+  # The image transformer. It reads originals from the storage by itself
+  # (D2): nothing in this project ever hands it bytes. It publishes no port
+  # -- nginx is the only way to reach it (D5), unlike the storage above.
+  # Declared whether or not IMAGE_PROVIDER names it, same as `storage`.
+  transformer:
+    image: darthsim/imgproxy:v4.0.14
+    environment:
+      IMGPROXY_KEY: ${IMAGE_SIGNING_KEY}
+      IMGPROXY_SALT: ${IMAGE_SIGNING_SALT}
+      IMGPROXY_USE_S3: "true"
+      IMGPROXY_S3_ENDPOINT: http://storage:9000
+      IMGPROXY_S3_REGION: us-east-1
+      IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+    depends_on:
+      storage:
+        condition: service_healthy
+    networks:
+      - pixpick
+
+  # The single door to the host: routes to the backend, the transformer, and
+  # the frontend. The only service here whose published port the application
+  # is opened on.
+  nginx:
+    build:
+      context: ./nginx
+    ports:
+      - "${NGINX_PORT}:80"
+    volumes:
+      # The images cache (D12 in add-media-ports-and-local-adapters): a
+      # volume, not an anonymous layer, so it survives a container
+      # restart instead of re-warming from nothing every time.
+      - nginx-cache:/var/cache/nginx/images
+    networks:
+      - pixpick
+
+networks:
+  pixpick:
+
+volumes:
+  postgres-data:
+  storage-data:
+  nginx-cache:

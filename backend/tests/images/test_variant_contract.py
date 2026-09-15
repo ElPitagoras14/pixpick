@@ -3,9 +3,9 @@ actually resolve through nginx (image-delivery spec), against the
 real transformer and storage this local environment provides.
 
 Requires the local environment already running with at least
-`postgres storage storage-init transformer nginx` up:
-    docker compose -f compose.yaml -f compose.dev.yaml up -d \\
-        postgres storage storage-init transformer nginx
+`postgres storage transformer nginx` up:
+    docker compose -f compose.dev.yaml up -d \\
+        postgres storage transformer nginx
 """
 
 import base64
