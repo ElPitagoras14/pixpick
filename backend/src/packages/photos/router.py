@@ -18,7 +18,7 @@ from .config import MAX_BATCH_SIZE
 from .responses import (
     ConfirmationResultResponse,
     GalleryResponse,
-    PhotoGrantResponse,
+    GrantBatchResponse,
     PhotoResponse,
 )
 from .schemas import GrantFileInput, RatingFilter
@@ -89,19 +89,18 @@ async def grant_photos(
     body: GrantPhotosRequest,
     album: AlbumRecord = Depends(get_owned_album),
     connection: AsyncConnection = Depends(get_connection),
-) -> Envelope[list[PhotoGrantResponse]]:
-    grants = await service.grant_batch(
+) -> Envelope[GrantBatchResponse]:
+    # Succeeds even when nothing was granted (D4): running out of room in
+    # the album or of space in the account is a fact about their state,
+    # not a malformed request, so the answer says per file what happened
+    # instead of failing the whole call.
+    result = await service.grant_batch(
         connection,
         album_id=album.id,
         owner_id=album.owner_id,
         files=[file.to_input() for file in body.files],
     )
-    return Envelope(
-        data=[
-            PhotoGrantResponse.from_grant(photo_id=photo_id, position=position, grant=grant)
-            for photo_id, position, grant in grants
-        ]
-    )
+    return Envelope(data=GrantBatchResponse.from_result(result))
 
 
 @router.post("/confirm")

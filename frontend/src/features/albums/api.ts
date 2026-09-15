@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 
 import { type ApiEnvelope, api, unwrapApiError } from "@/api";
+import { accountUsageQueryOptions } from "@/features/quota/api";
 
 export interface AlbumSummary {
 	id: string;
@@ -138,6 +139,12 @@ export function useDeleteAlbum() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({
 				queryKey: albumsQueryOptions().queryKey,
+			});
+			// An album takes its photos with it (album-management spec), so
+			// what it occupied stops counting against its owner's limit
+			// (account-quota spec).
+			queryClient.invalidateQueries({
+				queryKey: accountUsageQueryOptions().queryKey,
 			});
 		},
 	});

@@ -79,6 +79,7 @@ services:
       IMAGEKIT_URL_ENDPOINT: ${IMAGEKIT_URL_ENDPOINT}
       IMAGEKIT_PRIVATE_KEY: ${IMAGEKIT_PRIVATE_KEY}
       ALBUM_MAX_PHOTOS: ${ALBUM_MAX_PHOTOS}
+      ACCOUNT_MAX_BYTES: ${ACCOUNT_MAX_BYTES}
     depends_on:
       migrate:
         condition: service_completed_successfully

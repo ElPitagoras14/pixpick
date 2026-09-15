@@ -39,11 +39,12 @@ async def test_confirming_a_batch_warms_the_rating_variant_in_the_real_edge_cach
             content_type="image/png", size=len(_ONE_PIXEL_PNG), width=1, height=1
         )
     ]
-    grants = await photos_service.grant_batch(
+    result = await photos_service.grant_batch(
         committed_connection, album_id=album.id, owner_id=user.id, files=files
     )
     await committed_connection.commit()
-    photo_id, _position, grant = grants[0]
+    assert result.denied == []
+    photo_id, grant = result.granted[0].photo_id, result.granted[0].grant
     key = object_key(album_id=str(album.id), photo_id=str(photo_id))
 
     try:

@@ -9,9 +9,15 @@ import {
 	confirmPhotoBatch,
 	type GrantFileInput,
 	grantPhotoBatch,
+	type PhotoDenial,
 	type PhotoGrant,
 	photosQueryOptions,
 } from "@/features/photos/api";
+import {
+	accountUsageQueryOptions,
+	albumUsageQueryOptions,
+	formatBytes,
+} from "@/features/quota/api";
 
 // Mirrors the server's own constants (photo-upload spec): fixed, not
 // configurable, because they're the product's own contract and not
@@ -42,6 +48,11 @@ export type UploadItemStatus =
 	| "uploading"
 	| "confirming"
 	| ConfirmationStatus
+	// Asked for and not granted (D4): a state of its own, not a failure.
+	// Nothing went wrong -- there was no room -- so it reads differently
+	// and, unlike a failure, the way out is to free space, not to retry
+	// the same thing hoping for a different answer.
+	| "denied"
 	| "failed";
 
 export interface UploadItem {
@@ -61,6 +72,17 @@ function validateFile(file: File): string | null {
 		return "This file is too large.";
 	}
 	return null;
+}
+
+/** Why one file didn't get a grant, in the words the person can act on
+ * (D4): the two limits are never collapsed into one message, because an
+ * album that's full is fixed by creating another album and an account
+ * without space is not. */
+function denialMessage(denial: PhotoDenial): string {
+	if (denial.reason === "album_full") {
+		return "Album full";
+	}
+	return `No space (${formatBytes(denial.remainingBytes ?? 0)} left)`;
 }
 
 function errorMessage(error: unknown): string {
@@ -149,12 +171,15 @@ async function processBatch(
 		items.map((item) => readImageDimensions(item.file)),
 	);
 
-	let grants: PhotoGrant[];
+	let granted: PhotoGrant[];
+	let denied: PhotoDenial[];
 	try {
-		grants = await grantPhotoBatch(
+		const result = await grantPhotoBatch(
 			albumId,
 			items.map((item, index) => toGrantInput(item.file, dimensions[index])),
 		);
+		granted = result.granted;
+		denied = result.denied;
 	} catch (error) {
 		const message = errorMessage(error);
 		items.forEach((item) => {
@@ -163,10 +188,23 @@ async function processBatch(
 		return;
 	}
 
+	// Every file of the batch is in exactly one of the two lists, and each
+	// entry names which file it is by its index in the request (D4) -- the
+	// request carries no filename, so there is nothing else to match on,
+	// and matching by order stopped working the moment fewer grants than
+	// files could come back.
+	denied.forEach((denial) => {
+		update(items[denial.index].id, {
+			status: "denied",
+			progress: 0,
+			error: denialMessage(denial),
+		});
+	});
+
 	const uploaded: Array<{ item: UploadItem; grant: PhotoGrant }> = [];
 	await runWithConcurrency(
-		items.map((item, index) => async () => {
-			const grant = grants[index];
+		granted.map((grant) => async () => {
+			const item = items[grant.index];
 			update(item.id, { photoId: grant.photoId });
 			try {
 				await uploadToStorage(grant, item.file, (progress) =>
@@ -249,6 +287,14 @@ export function useUploadQueue(albumId: string) {
 				});
 				queryClient.invalidateQueries({
 					queryKey: albumsQueryOptions().queryKey,
+				});
+				// What was just uploaded is what the space meters now have to
+				// account for -- the account's own, and this album's.
+				queryClient.invalidateQueries({
+					queryKey: accountUsageQueryOptions().queryKey,
+				});
+				queryClient.invalidateQueries({
+					queryKey: albumUsageQueryOptions(albumId).queryKey,
 				});
 			}
 		},
