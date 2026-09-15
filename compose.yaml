@@ -1,15 +1,17 @@
-# This file's own four images (migrate, backend, frontend, nginx) are
-# each declared with `image: ghcr.io/...`, not `build:` -- this is the
-# file a deployment pulls published images with, never one that builds
-# from source. compose.dev.yaml is where `build:` lives for each of the
-# four, overriding the image declared here for local development; add
-# `--build` to `docker compose up` after a source change so the override
-# actually rebuilds instead of reusing a stale local image.
+# The published-images declaration of the environment: the project's own
+# four images (migrate, backend, frontend, nginx) are pulled by tag rather
+# than built, and no port is published to the host -- the platform's own
+# proxy reaches the services over this network. It is complete on its own
+# and is never combined with another file:
+#
+#   docker compose up
 #
 # No workflow publishes these tags to GHCR yet -- `ghcr.io/elpitagoras14/
-# pixpick-*:latest` doesn't exist there today, so this file alone (without
-# compose.dev.yaml's own `build:` override) can't start any of the four
-# until one does.
+# pixpick-*:latest` doesn't exist there today, so this file can't start
+# those four until one does. compose.dev.yaml is the other declaration,
+# the one that builds from source; the two describe the same seven
+# services and differ only in where each image comes from and which ports
+# are published.
 services:
   postgres:
     image: postgres:18.6
@@ -78,12 +80,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      # Only present in the local profile (D1 in add-cloud-media-adapters):
-      # `required: false` means this is simply skipped, not an error, when
-      # the cloud profile leaves it out of the resolved project entirely.
       storage:
         condition: service_healthy
-        required: false
     networks:
       - pixpick
 
@@ -96,13 +94,12 @@ services:
       - pixpick
 
   # The object storage. The browser writes to it directly (D3 in
-  # add-media-ports-and-local-adapters), so unlike every other service in
-  # this file it is meant to be reached from outside the Docker network too
-  # -- compose.dev.yaml is what publishes its port. Only started in the
-  # local profile (D1 in add-cloud-media-adapters): a cloud STORAGE_PROVIDER
-  # needs none of this, its bucket already exists at the provider.
+  # add-media-ports-and-local-adapters), so unlike every other service here
+  # it is meant to be reached from outside the Docker network too, and this
+  # file publishes no port for it. Declared whether or not STORAGE_PROVIDER
+  # names it: which provider the application talks to is decided by that
+  # variable, never by which containers are up.
   storage:
-    profiles: ["local"]
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
@@ -124,14 +121,10 @@ services:
       - pixpick
 
   # The image transformer. It reads originals from the storage by itself
-  # (D2): nothing in this project ever hands it bytes. It publishes no port
-  # -- nginx is the only way to reach it (D5), unlike the storage above.
-  # Local profile only, same reason as `storage`: nginx's own /images route
-  # resolves this hostname per-request (nginx.conf), never at startup, so
-  # its absence in the cloud profile is never an error (D5 in
-  # add-media-ports-and-local-adapters, unchanged by this).
+  # (D2): nothing in this project ever hands it bytes. nginx is the only
+  # way to reach it (D5), unlike the storage above. Declared whether or not
+  # IMAGE_PROVIDER names it, same as `storage`.
   transformer:
-    profiles: ["local"]
     image: darthsim/imgproxy:v4.0.14
     environment:
       IMGPROXY_KEY: ${IMAGE_SIGNING_KEY}
@@ -149,9 +142,8 @@ services:
       - pixpick
 
   # The single door to the host: routes to the backend, the transformer, and
-  # the frontend. No other service in this file publishes a port: the
-  # platform's own proxy reaches them over this network instead (D7).
-  # compose.dev.yaml is what opens ports on a developer's machine.
+  # the frontend. No service in this file publishes a port: the platform's
+  # own proxy reaches them over this network instead (D7).
   nginx:
     image: ghcr.io/elpitagoras14/pixpick-nginx:latest
     volumes:

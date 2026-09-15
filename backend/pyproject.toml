@@ -31,6 +31,11 @@ Repository = "https://github.com/ElPitagoras14/scaffold-base"
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    # Only the compose convention check reads it. Declared rather than
+    # taken for granted: it already arrives through fastapi[standard],
+    # and a test resting on a dependency nobody asked for breaks the day
+    # that graph changes, with nothing to announce it.
+    "pyyaml>=6.0.3",
     "ruff>=0.16.7",
 ]
 

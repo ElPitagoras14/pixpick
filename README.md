@@ -18,29 +18,40 @@ You only need the last two if you run the backend or the frontend on your own ma
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose -f compose.dev.yaml up --build
 ```
 
 Then open `http://localhost:8080`. The port comes from `NGINX_PORT` in `.env`.
 
 That one command starts everything: `postgres`, `storage`, `transformer`, `backend`, `frontend` and `nginx`. It also applies the database migrations and creates the bucket the photos go into. There is no other step.
 
-You do not pass `-f` to any command. The `.env` file names the two compose files in `COMPOSE_FILE`.
-
 Add `--build` after you change the code. Without it, Compose starts the image it built before.
+
+### The two compose files
+
+There are two ways to start the same seven services. Each one is written in full, in its own file:
+
+| File | What it does | How you start it |
+| --- | --- | --- |
+| `compose.dev.yaml` | builds the four images from the code in this repository, and opens ports on your machine | `docker compose -f compose.dev.yaml up` |
+| `compose.yaml` | pulls those four images by tag, and opens no port | `docker compose up` |
+
+Use `compose.dev.yaml` to work on the project. Every command on this page that builds or opens a port names it.
+
+The two files are never mixed. Each one lists all seven services with everything they need, so you can read either one on its own. They say the same thing except for where each image comes from and which ports are open.
 
 ### See what each service gets
 
 ```bash
-docker compose config
+docker compose -f compose.dev.yaml config
 ```
 
-This prints every service with its final values, as Compose reads them from the compose files and from your `.env`. Change a value in `.env` and run it again to see the new one.
+This prints every service with its final values, as Compose reads them from that file and from your `.env`. Change a value in `.env` and run it again to see the new one.
 
 ### Stop it
 
 ```bash
-docker compose down
+docker compose -f compose.dev.yaml down
 ```
 
 Add `-v` to also delete the database and the stored photos.
@@ -50,7 +61,7 @@ Add `-v` to also delete the database and the stored photos.
 You can run those two outside Docker. The other services keep running in Docker:
 
 ```bash
-docker compose up -d postgres migrate storage transformer nginx
+docker compose -f compose.dev.yaml up -d postgres migrate storage transformer nginx
 
 cd backend
 uv sync
@@ -104,9 +115,9 @@ Fill in `IMAGEKIT_URL_ENDPOINT` and `IMAGEKIT_PRIVATE_KEY`.
 
 1. Set `STORAGE_PROVIDER=r2` and `IMAGE_PROVIDER=imagekit`.
 2. Set `POSTGRES_DB` to another name, and change the database name in `DATABASE_URL` to the same one. Each name keeps its own albums and photos.
-3. Empty `COMPOSE_PROFILES`, so the `storage` and `transformer` services do not start.
-
 The bucket in R2 has to exist before you start. The backend stops with an error if it does not.
+
+`storage` and `transformer` still start. Nothing asks them anything, and nothing breaks.
 
 ### Move the photos to another provider
 
@@ -128,13 +139,13 @@ To go back, set `STORAGE_PROVIDER` to the old value. Keep the old content until 
 Read the logs of one service:
 
 ```bash
-docker compose logs -f backend
+docker compose -f compose.dev.yaml logs -f backend
 ```
 
 See the values a service really got:
 
 ```bash
-docker compose config
+docker compose -f compose.dev.yaml config
 ```
 
 List what is in the local storage:
@@ -159,7 +170,7 @@ uv run python -m src.packages.photos.reconcile
 ## Run the tests
 
 ```bash
-docker compose up -d postgres storage transformer nginx
+docker compose -f compose.dev.yaml up -d postgres storage transformer nginx
 cd backend
 uv sync
 uv run pytest
@@ -211,7 +222,7 @@ pixpick/
 
 The browser only talks to `nginx`. `storage` is the one exception: the browser sends each photo straight to it.
 
-`storage` and `transformer` only start when `COMPOSE_PROFILES=local`.
+Both files declare all seven. `storage` and `transformer` start even when `STORAGE_PROVIDER` and `IMAGE_PROVIDER` name a cloud provider. Those two variables decide who the app talks to, not which containers run.
 
 ### The backend (`backend/`)
 
@@ -240,7 +251,7 @@ Create a migration. Rename the new file to the next number, such as `0002_...`:
 docker run --rm -v "$(pwd)/dbmate:/db" ghcr.io/amacneil/dbmate:2.35.1 new create_some_table
 ```
 
-Apply the pending migrations. `docker compose up` already does this, so you only need it when you started `postgres` alone:
+Apply the pending migrations. Starting the project already does this, so you only need it when you started `postgres` alone:
 
 ```bash
 docker run --rm --add-host=host.docker.internal:host-gateway \

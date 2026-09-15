@@ -15,9 +15,9 @@ async def storage_harness(request) -> AsyncIterator[StorageHarness]:
     "active" builds through the same factory the application itself
     uses (`build_storage_port`), so it exercises whichever provider
     `STORAGE_PROVIDER` currently names -- MinIO by default, requiring
-    the real storage to already be up (`docker compose up -d storage
-    storage-init`), the same expectation the suite already has of
-    Postgres. To run this against the other provider, point `STORAGE_*`
+    the real storage to already be up (`docker compose -f
+    compose.dev.yaml up -d storage`), the same expectation the suite
+    already has of Postgres. To run this against the other provider, point `STORAGE_*`
     at it and run the suite again; there's no way to exercise both in
     the same run, since both providers share this one set of settings.
     """

@@ -2,9 +2,9 @@
 add-media-ports-and-local-adapters' spirit, extended here): confirms that
 warming a variant after a batch is confirmed actually leaves it in
 nginx's own cache (task 4.3), not merely that the warm-up task didn't
-raise. Requires `docker compose up -d storage storage-init transformer
-nginx` already running, the same expectation `tests/storage/` and
-`tests/images/` already have.
+raise. Requires `docker compose -f compose.dev.yaml up -d storage
+transformer nginx` already running, the same expectation
+`tests/storage/` and `tests/images/` already have.
 """
 
 import base64
