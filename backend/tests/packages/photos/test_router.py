@@ -3,7 +3,6 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from src.exceptions import StateConflictError
 from src.packages.photos import repository
 from src.packages.photos import service as photos_service
 from src.packages.photos.schemas import GrantFileInput
@@ -73,13 +72,20 @@ async def test_granting_assigns_sequential_positions_after_existing_photos(
     )
 
     assert response.status_code == 200
-    positions = [item["position"] for item in response.json()["data"]]
-    assert positions == [2, 3]
+    data = response.json()["data"]
+    assert [item["position"] for item in data["granted"]] == [2, 3]
+    assert [item["index"] for item in data["granted"]] == [0, 1]
+    assert data["denied"] == []
 
 
-async def test_a_lot_that_would_exceed_the_maximum_is_rejected_as_a_state_conflict(
+async def test_a_lot_that_would_exceed_the_maximum_is_granted_in_part(
     client, connection, fake_storage, monkeypatch
 ):
+    """Replaces the rejection this case used to produce (photo-upload
+    spec, modified by add-account-quota): running out of room in an album
+    is a fact about the album's state, not a mistake in what was asked,
+    so what fits is granted and the rest comes back explained.
+    """
     monkeypatch.setattr("src.packages.photos.service.photos_settings.album_max_photos", 2)
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -90,10 +96,12 @@ async def test_a_lot_that_would_exceed_the_maximum_is_rejected_as_a_state_confli
         json={"files": [_ONE_FILE, _ONE_FILE]},
     )
 
-    assert response.status_code == 409
-    error = response.json()["error"]
-    assert error["field"] is None
-    assert error["details"] == {"remaining": 1}
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert [item["index"] for item in data["granted"]] == [0]
+    assert data["denied"] == [
+        {"index": 1, "reason": "album_full", "remainingPhotos": 0, "remainingBytes": None}
+    ]
 
 
 async def test_pending_photos_with_a_live_grant_occupy_a_slot(
@@ -105,10 +113,12 @@ async def test_pending_photos_with_a_live_grant_occupy_a_slot(
 
     first = client.post(f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]})
     assert first.status_code == 200
+    assert len(first.json()["data"]["granted"]) == 1
 
     second = client.post(f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]})
-    assert second.status_code == 409
-    assert second.json()["error"]["details"]["remaining"] == 0
+    assert second.status_code == 200
+    assert second.json()["data"]["granted"] == []
+    assert second.json()["data"]["denied"][0]["reason"] == "album_full"
 
 
 async def test_an_expired_pending_grant_no_longer_occupies_a_slot(
@@ -146,7 +156,9 @@ async def test_reducing_the_maximum_does_not_touch_an_existing_album(
     grant_response = client.post(
         f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]}
     )
-    assert grant_response.status_code == 409
+    assert grant_response.status_code == 200
+    assert grant_response.json()["data"]["granted"] == []
+    assert grant_response.json()["data"]["denied"][0]["reason"] == "album_full"
 
 
 async def test_freeing_space_re_enables_granting(committed_connection, fake_storage, monkeypatch):
@@ -163,24 +175,21 @@ async def test_freeing_space_re_enables_granting(committed_connection, fake_stor
     photo = await create_photo(committed_connection, album_id=album.id, position=1)
     await committed_connection.commit()
 
-    with pytest.raises(StateConflictError):
-        await photos_service.grant_batch(
-            committed_connection,
-            album_id=album.id,
-            owner_id=owner.id,
-            files=[GrantFileInput(content_type="image/jpeg", size=1000, width=100, height=100)],
-        )
+    files = [GrantFileInput(content_type="image/jpeg", size=1000, width=100, height=100)]
+    full = await photos_service.grant_batch(
+        committed_connection, album_id=album.id, owner_id=owner.id, files=files
+    )
+    assert full.granted == []
+    assert full.denied[0].reason == "album_full"
     await committed_connection.commit()
 
     await photos_service.delete_photo(album_id=album.id, user_id=owner.id, photo_id=photo.id)
 
-    grants = await photos_service.grant_batch(
-        committed_connection,
-        album_id=album.id,
-        owner_id=owner.id,
-        files=[GrantFileInput(content_type="image/jpeg", size=1000, width=100, height=100)],
+    result = await photos_service.grant_batch(
+        committed_connection, album_id=album.id, owner_id=owner.id, files=files
     )
-    assert len(grants) == 1
+    assert len(result.granted) == 1
+    assert result.denied == []
 
 
 async def test_granting_for_a_foreign_album_responds_like_a_nonexistent_one(
@@ -472,3 +481,109 @@ async def test_a_member_who_is_not_the_owner_cannot_delete_a_photo(client, commi
     response = client.delete(f"/api/albums/{album.id}/photos/{photo.id}")
 
     assert response.status_code == 403
+
+
+async def test_a_file_that_does_not_fit_is_skipped_and_a_smaller_one_behind_it_still_fits(
+    client, connection, fake_storage, monkeypatch
+):
+    """D5: the walk skips what doesn't fit instead of stopping at it, so
+    one large file at the front of a selection can't discard the smaller
+    ones behind it for no reason other than the order they were picked.
+    """
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_500)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(
+        f"/api/albums/{album.id}/photos/grants",
+        json={
+            "files": [
+                {**_ONE_FILE, "size": 1_400},
+                {**_ONE_FILE, "size": 1_200},
+                {**_ONE_FILE, "size": 100},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert [item["index"] for item in data["granted"]] == [0, 2]
+    assert [item["index"] for item in data["denied"]] == [1]
+    assert data["denied"][0]["reason"] == "account_full"
+    assert data["denied"][0]["remainingBytes"] == 100
+
+
+async def test_asking_for_more_than_fits_answers_every_file_exactly_once(
+    client, connection, fake_storage, monkeypatch
+):
+    """D4: the two lists together account for the whole request, and the
+    index on each entry is what lets the client say which file each one
+    is -- the request carries no filename to match them by."""
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 2_500)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE] * 4})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data["granted"]) == 2
+    assert len(data["denied"]) == 2
+    indexes = [item["index"] for item in data["granted"] + data["denied"]]
+    assert sorted(indexes) == [0, 1, 2, 3]
+
+
+async def test_an_account_without_space_denies_with_its_own_reason(
+    client, connection, fake_storage, monkeypatch
+):
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 500)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["denied"] == [
+        {"index": 0, "reason": "account_full", "remainingPhotos": None, "remainingBytes": 500}
+    ]
+
+
+async def test_an_album_with_room_still_denies_when_the_account_is_full_elsewhere(
+    client, connection, fake_storage, monkeypatch
+):
+    """The account's space is measured over every album its owner has
+    (photo-upload spec), so an empty album is no help once the account
+    itself is full -- and the reason says so, since creating yet another
+    album would not fix it."""
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_000)
+    owner = await log_in(client, connection)
+    crowded = await create_album(connection, owner_id=owner.id, title="Crowded")
+    await create_photo(connection, album_id=crowded.id, declared_size=1_000, size=1_000)
+    empty = await create_album(connection, owner_id=owner.id, title="Empty")
+
+    response = client.post(f"/api/albums/{empty.id}/photos/grants", json={"files": [_ONE_FILE]})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["granted"] == []
+    assert data["denied"][0]["reason"] == "account_full"
+    assert data["denied"][0]["remainingBytes"] == 0
+
+
+async def test_an_album_of_someone_else_never_eats_into_this_persons_space(
+    client, connection, fake_storage, monkeypatch
+):
+    """A photo rated in an album someone shared counts against its
+    owner's limit, never the viewer's (account-quota spec)."""
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_000)
+    stranger = await create_user(connection)
+    foreign = await create_album(connection, owner_id=stranger.id)
+    await create_photo(connection, album_id=foreign.id, declared_size=1_000, size=1_000)
+    owner = await log_in(client, connection)
+    await create_membership(connection, album_id=foreign.id, user_id=owner.id)
+    own = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(f"/api/albums/{own.id}/photos/grants", json={"files": [_ONE_FILE]})
+
+    assert response.status_code == 200
+    assert len(response.json()["data"]["granted"]) == 1

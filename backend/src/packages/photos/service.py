@@ -4,11 +4,13 @@ from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.utils import transaction
-from src.exceptions import NotFoundError, StateConflictError, ValidationFailedError
+from src.exceptions import NotFoundError, ValidationFailedError
 from src.packages.albums import repository as albums_repository
 from src.packages.albums import service as albums_service
+from src.packages.auth import repository as auth_repository
+from src.packages.quota import repository as quota_repository
 from src.storage.factory import storage_port
-from src.storage.port import UploadGrant, object_key
+from src.storage.port import object_key
 
 from . import repository
 from .config import (
@@ -20,8 +22,11 @@ from .config import (
 from .schemas import (
     AvailablePhotoRow,
     ConfirmationOutcome,
+    DeniedFile,
     GalleryCounts,
     GalleryResult,
+    GrantBatchResult,
+    GrantedFile,
     GrantFileInput,
     RatingFilter,
 )
@@ -48,36 +53,70 @@ def _validate_files(files: list[GrantFileInput]) -> None:
 
 async def grant_batch(
     connection: AsyncConnection, *, album_id: UUID, owner_id: UUID, files: list[GrantFileInput]
-) -> list[tuple[UUID, int, UploadGrant]]:
+) -> GrantBatchResult:
+    """Grants what fits and explains what does not (D4, D5). Two
+    independent capacity limits are evaluated per file -- the album's
+    maximum number of photos and the owner's storage -- and a file is
+    granted only if it fits in both.
+
+    Neither one rejects the whole batch: running out of capacity is a
+    fact about the account's state, not a mistake in what was asked, so
+    what fits is granted and what does not comes back named and
+    explained. An inadmissible *file*, checked above, still rejects the
+    batch whole -- the client knows its own files' type and size before
+    asking, so that one really is an inconsistency.
+    """
     _validate_files(files)
 
-    # Locks the album for the rest of this transaction (D12, D14): a
-    # second batch granted for the same album at the same time waits
-    # here instead of computing the occupancy count or the next position
-    # from a view of the album that's about to change.
-    owner = await albums_repository.lock_owned_album_id(
+    # Locks the *person* for the rest of this transaction (D1), where
+    # granting used to lock the album: the account's limit spans every
+    # album its owner has, so two batches in two of their albums have to
+    # serialize against each other, which a lock on one album cannot do.
+    # Every album has exactly one owner, so this still serializes the
+    # position and occupancy counting the album lock protected.
+    locked_owner = await auth_repository.lock_user_id(connection, user_id=owner_id)
+    if locked_owner is None:
+        raise NotFoundError()
+
+    # Ownership as a query of its own, now that it no longer travels
+    # attached to the lock (D1).
+    album = await albums_repository.get_owned_album(
         connection, album_id=album_id, owner_id=owner_id
     )
-    if owner is None:
+    if album is None:
         raise NotFoundError()
 
     occupied = await repository.count_occupied_slots(connection, album_id=album_id)
-    remaining = photos_settings.album_max_photos - occupied
-    if len(files) > remaining:
-        raise StateConflictError(
-            code="album_full",
-            message=f"the album has room for {max(remaining, 0)} more photo(s)",
-            details={"remaining": max(remaining, 0)},
-        )
+    used_bytes = await quota_repository.account_used_bytes(connection, owner_id=owner_id)
+    remaining_photos = max(photos_settings.album_max_photos - occupied, 0)
+    remaining_bytes = max(photos_settings.account_max_bytes - used_bytes, 0)
 
     base_position = await repository.next_position(connection, album_id=album_id)
     expires_at = datetime.now(UTC) + UPLOAD_GRANT_TTL
 
-    results: list[tuple[UUID, int, UploadGrant]] = []
+    granted: list[GrantedFile] = []
+    denied: list[DeniedFile] = []
     rows: list[dict] = []
-    for offset, file in enumerate(files):
+    for index, file in enumerate(files):
+        # The album is checked first: once it is full it is full for
+        # every file left, so its own reason is the one that stands even
+        # when the account has no space either (D5 -- for this limit
+        # there is nothing to skip ahead to).
+        if remaining_photos <= 0:
+            denied.append(DeniedFile(index=index, reason="album_full", remaining_photos=0))
+            continue
+        if file.size > remaining_bytes:
+            # Skipped, not stopped on (D5): a smaller file further down
+            # the batch may still fit, and letting one large file at the
+            # front discard the rest would waste space for no reason
+            # other than the order they were picked in.
+            denied.append(
+                DeniedFile(index=index, reason="account_full", remaining_bytes=remaining_bytes)
+            )
+            continue
+
         photo_id = uuid4()
-        position = base_position + offset
+        position = base_position + len(granted)
         grant = storage_port.grant_upload(
             album_id=str(album_id),
             photo_id=str(photo_id),
@@ -96,10 +135,17 @@ async def grant_batch(
                 "upload_expires_at": expires_at,
             }
         )
-        results.append((photo_id, position, grant))
+        granted.append(GrantedFile(index=index, photo_id=photo_id, position=position, grant=grant))
+        # Both limits are charged as the walk goes (photo-upload spec):
+        # a file waiting to be confirmed occupies its slot and its
+        # declared size from the moment its grant is issued, so a batch
+        # cannot outgrow either limit against itself.
+        remaining_photos -= 1
+        remaining_bytes -= file.size
 
-    await repository.insert_pending_photos(connection, rows)
-    return results
+    if rows:
+        await repository.insert_pending_photos(connection, rows)
+    return GrantBatchResult(granted=granted, denied=denied)
 
 
 async def list_photos(connection: AsyncConnection, *, album_id: UUID) -> list[AvailablePhotoRow]:

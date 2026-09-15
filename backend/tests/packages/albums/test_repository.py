@@ -179,21 +179,6 @@ async def test_rename_owned_album_is_none_for_a_foreign_album(connection):
     assert result is None
 
 
-async def test_lock_owned_album_id_returns_none_for_a_foreign_album(connection):
-    owner = await create_user(connection)
-    stranger = await create_user(connection)
-    album = await create_album(connection, owner_id=owner.id)
-
-    assert (
-        await repository.lock_owned_album_id(connection, album_id=album.id, owner_id=owner.id)
-        == album.id
-    )
-    assert (
-        await repository.lock_owned_album_id(connection, album_id=album.id, owner_id=stranger.id)
-        is None
-    )
-
-
 async def test_delete_owned_album_returning_photo_ids(connection):
     user = await create_user(connection)
     album = await create_album(connection, owner_id=user.id)

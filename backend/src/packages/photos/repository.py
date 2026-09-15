@@ -55,10 +55,10 @@ async def next_position(connection: AsyncConnection, *, album_id: UUID) -> int:
 
 async def insert_pending_photos(connection: AsyncConnection, rows: list[dict]) -> None:
     """One batch write for the whole grant (D12): together with the lock
-    `albums.repository.lock_owned_album_id` takes first, this is what
-    keeps two batches granted for the same album at once from claiming
-    the same position or, combined with the occupancy count, from
-    slipping past the maximum together.
+    `auth.repository.lock_user_id` takes first, this is what keeps two
+    batches granted at once for the same person from claiming the same
+    position or, combined with the occupancy count and the account's
+    usage, from slipping past either limit together.
     """
     await write_many(
         connection,

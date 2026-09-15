@@ -1,12 +1,14 @@
 import { HeartIcon, Trash2Icon, XIcon } from "lucide-react";
 
 import type { GalleryPhoto, PhotoStats } from "@/features/gallery/api";
+import { formatBytes } from "@/features/quota/api";
 import { cn } from "@/lib/utils";
 
 interface GalleryPhotoCardProps {
 	photo: GalleryPhoto;
 	onSetRating: (approved: boolean) => void;
 	stats?: PhotoStats;
+	sizeBytes?: number;
 	onDelete?: () => void;
 }
 
@@ -15,11 +17,17 @@ interface GalleryPhotoCardProps {
  * `stats` (the owner) -- the aggregate counts as a compact strip below
  * the image, never sharing a corner with the indicator above (Risks:
  * the two would otherwise compete for the same corner).
+ *
+ * What the photo occupies joins that same strip rather than starting one
+ * of its own (account-quota spec): it is owner-only for the same reason
+ * the counts are, and it arrives from its own resource, so it is present
+ * or absent independently of them.
  */
 export function GalleryPhotoCard({
 	photo,
 	onSetRating,
 	stats,
+	sizeBytes,
 	onDelete,
 }: GalleryPhotoCardProps) {
 	return (
@@ -89,10 +97,11 @@ export function GalleryPhotoCard({
 				)}
 			</div>
 
-			{stats && (
+			{(stats || sizeBytes !== undefined) && (
 				<p className="text-muted-foreground flex justify-center gap-3 text-xs">
-					<span>{stats.approvedCount} approved</span>
-					<span>{stats.rejectedCount} rejected</span>
+					{stats && <span>{stats.approvedCount} approved</span>}
+					{stats && <span>{stats.rejectedCount} rejected</span>}
+					{sizeBytes !== undefined && <span>{formatBytes(sizeBytes)}</span>}
 				</p>
 			)}
 		</li>

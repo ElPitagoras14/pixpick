@@ -18,6 +18,13 @@ class PhotosSettings(BaseSettings):
     # environment variable this change adds).
     album_max_photos: int = 50
 
+    # The other limit granting evaluates (account-quota spec), declared
+    # beside it because the two are checked together and nowhere else.
+    # In bytes rather than a friendlier unit: it's compared against a
+    # file's own declared size, which arrives in bytes too, so any other
+    # unit here would only move a conversion into the comparison.
+    account_max_bytes: int = 150 * 1024 * 1024  # 150 MiB
+
 
 photos_settings = PhotosSettings()  # type: ignore[call-arg]
 

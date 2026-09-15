@@ -24,6 +24,7 @@ import {
 import { GalleryPhotoCard } from "@/features/gallery/GalleryPhotoCard";
 import { GalleryTabs } from "@/features/gallery/GalleryTabs";
 import { useDeletePhoto } from "@/features/photos/api";
+import { albumUsageQueryOptions } from "@/features/quota/api";
 
 // A closed set of four values with a default (D9, rating-gallery spec):
 // `.catch` is what turns an unrecognized filter into "all" instead of a
@@ -70,6 +71,17 @@ function AlbumGallery() {
 	});
 	const statsByPhotoId = new Map(
 		stats?.photos.map((photo) => [photo.photoId, photo]) ?? [],
+	);
+	// Its own resource, asked for the same way and for the same reason as
+	// the stats above (D3): what a photo occupies is the owner's business,
+	// so it never travels in the gallery -- which someone with a shared
+	// link reads too -- and never blocks the grid from being drawn.
+	const { data: usage } = useQuery({
+		...albumUsageQueryOptions(albumId),
+		enabled: album.isOwner,
+	});
+	const sizeByPhotoId = new Map(
+		usage?.photos.map((photo) => [photo.photoId, photo.sizeBytes]) ?? [],
 	);
 
 	const setRating = useSetRating(albumId);
@@ -121,6 +133,9 @@ function AlbumGallery() {
 							key={photo.id}
 							photo={photo}
 							stats={album.isOwner ? statsByPhotoId.get(photo.id) : undefined}
+							sizeBytes={
+								album.isOwner ? sizeByPhotoId.get(photo.id) : undefined
+							}
 							onSetRating={(approved) =>
 								setRating.mutate({ photoId: photo.id, approved })
 							}

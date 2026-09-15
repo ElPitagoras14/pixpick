@@ -10,6 +10,10 @@ import {
 	albumStatsQueryOptions,
 	galleryQueryKeyPrefix,
 } from "@/features/gallery/api";
+import {
+	accountUsageQueryOptions,
+	albumUsageQueryOptions,
+} from "@/features/quota/api";
 
 export interface Photo {
 	id: string;
@@ -20,10 +24,32 @@ export interface Photo {
 }
 
 export interface PhotoGrant {
+	// The position the file had in the request (D4): with a batch that
+	// can be granted only in part, the response is no longer as long as
+	// the request, so order alone no longer says which file this is for.
+	index: number;
 	photoId: string;
 	position: number;
 	uploadUrl: string;
 	uploadHeaders: Record<string, string>;
+}
+
+// Which of the two capacity limits stopped a file (photo-upload spec).
+// They are not resolved the same way: an album that's full is resolved
+// by creating another album, an account without space by deleting
+// something -- so they are never collapsed into one message.
+export type DenialReason = "album_full" | "account_full";
+
+export interface PhotoDenial {
+	index: number;
+	reason: DenialReason;
+	remainingPhotos: number | null;
+	remainingBytes: number | null;
+}
+
+export interface GrantBatchResult {
+	granted: PhotoGrant[];
+	denied: PhotoDenial[];
 }
 
 export type ConfirmationStatus = "available" | "rejected" | "pending";
@@ -64,13 +90,13 @@ export function photosQueryOptions(albumId: string) {
 export async function grantPhotoBatch(
 	albumId: string,
 	files: GrantFileInput[],
-): Promise<PhotoGrant[]> {
+): Promise<GrantBatchResult> {
 	try {
-		const response = await api.post<ApiEnvelope<PhotoGrant[]>>(
+		const response = await api.post<ApiEnvelope<GrantBatchResult>>(
 			`/albums/${albumId}/photos/grants`,
 			{ files },
 		);
-		return response.data.data ?? [];
+		return response.data.data ?? { granted: [], denied: [] };
 	} catch (error) {
 		unwrapApiError(error);
 	}
@@ -110,6 +136,15 @@ export function useDeletePhoto(albumId: string) {
 	return useMutation({
 		mutationFn: deletePhoto,
 		onSuccess: () => {
+			// Freeing space is what re-enables adding (account-quota spec),
+			// so the meters that show how much is left are stale the moment
+			// a photo goes.
+			queryClient.invalidateQueries({
+				queryKey: accountUsageQueryOptions().queryKey,
+			});
+			queryClient.invalidateQueries({
+				queryKey: albumUsageQueryOptions(albumId).queryKey,
+			});
 			// A deleted photo can change the album's cover and count too
 			// (album-management spec), not only its own grid -- and, now
 			// that the grid is the gallery (rating-gallery spec), every one

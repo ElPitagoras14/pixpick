@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from src.database.client import fetch_one, write
+from src.database.client import fetch_one, fetch_val_or_none, write
 from src.identity.port import ExternalIdentity
 
 from .schemas import SessionRecord, UserRecord
@@ -39,6 +39,29 @@ async def upsert_user(connection: AsyncConnection, identity: ExternalIdentity) -
     )
     assert row is not None
     return row
+
+
+async def lock_user_id(connection: AsyncConnection, *, user_id: UUID) -> UUID | None:
+    """Locks the person's row for the rest of the transaction (D1 in
+    add-account-quota): granting upload permissions serializes here, so
+    two batches for two different albums of the same person can never
+    each measure the account's consumption from a view the other is
+    about to change. `None` when there is no such person.
+
+    It replaces the lock on the album row that granting used to take:
+    every album has exactly one owner, so serializing by person already
+    serializes by album, and one lock instead of two leaves no pair of
+    transactions able to take them in opposite orders. Nothing else in
+    the backend writes this table except the sign-in upsert above, and
+    the transaction holding this lock makes no network call, so the wait
+    it can cause is milliseconds and only against that same person's own
+    sign-in.
+    """
+    return await fetch_val_or_none(
+        connection,
+        "select id from users where id = :user_id for update",
+        {"user_id": user_id},
+    )
 
 
 async def delete_expired_sessions_for_user(connection: AsyncConnection, user_id: UUID) -> None:

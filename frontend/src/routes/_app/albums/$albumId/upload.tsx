@@ -1,3 +1,4 @@
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ImagePlusIcon } from "lucide-react";
 import { type ChangeEvent, useRef } from "react";
@@ -8,8 +9,11 @@ import {
 	type UploadItemStatus,
 	useUploadQueue,
 } from "@/features/photos/uploadQueue";
+import { accountUsageQueryOptions, formatBytes } from "@/features/quota/api";
 
 export const Route = createFileRoute("/_app/albums/$albumId/upload")({
+	loader: ({ context }) =>
+		context.queryClient.ensureQueryData(accountUsageQueryOptions()),
 	component: UploadView,
 });
 
@@ -20,13 +24,16 @@ const STATUS_LABEL: Record<UploadItemStatus, string> = {
 	available: "Uploaded",
 	pending: "Waiting for upload to finish",
 	rejected: "Rejected",
+	denied: "Not enough room",
 	failed: "Failed",
 };
 
 function UploadView() {
 	const { albumId } = Route.useParams();
 	const { items, addFiles, retry } = useUploadQueue(albumId);
+	const { data: usage } = useSuspenseQuery(accountUsageQueryOptions());
 	const inputRef = useRef<HTMLInputElement>(null);
+	const remaining = Math.max(usage.limitBytes - usage.usedBytes, 0);
 
 	function handleFilesSelected(event: ChangeEvent<HTMLInputElement>) {
 		const files = event.target.files;
@@ -62,6 +69,20 @@ function UploadView() {
 				<p className="text-muted-foreground text-sm">
 					Pick one or more photos to add to this album.
 				</p>
+				{/* Before choosing, not after the server turns some away (D6):
+				the limit stops being something discovered by hitting it and
+				becomes something seen while deciding. */}
+				<p
+					className={
+						remaining === 0
+							? "text-destructive text-sm font-medium"
+							: "text-muted-foreground text-sm"
+					}
+				>
+					{remaining === 0
+						? "No space left. Delete some photos to make room."
+						: `${formatBytes(remaining)} of ${formatBytes(usage.limitBytes)} free`}
+				</p>
 				<Button size="lg" onClick={() => inputRef.current?.click()}>
 					<ImagePlusIcon />
 					Choose photos
@@ -73,14 +94,20 @@ function UploadView() {
 					{items.map((item) => (
 						<li key={item.id} className="flex items-center gap-3">
 							<span className="flex-1 truncate text-sm">{item.file.name}</span>
-							<span className="text-muted-foreground w-40 shrink-0 text-xs">
+							<span
+								className={
+									item.status === "denied"
+										? "text-destructive w-40 shrink-0 text-xs"
+										: "text-muted-foreground w-40 shrink-0 text-xs"
+								}
+							>
 								{item.status === "uploading" ? (
 									<Progress value={item.progress} />
 								) : (
 									(item.error ?? STATUS_LABEL[item.status])
 								)}
 							</span>
-							{item.status === "failed" && (
+							{(item.status === "failed" || item.status === "denied") && (
 								<Button
 									size="sm"
 									variant="outline"

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { type AlbumSummary, albumsQueryOptions } from "@/features/albums/api";
+import { accountUsageQueryOptions, formatBytes } from "@/features/quota/api";
 import { cn } from "@/lib/utils";
 
 const ALBUM_GROUPS = ["own", "shared"] as const;
@@ -19,7 +20,10 @@ const albumsSearchSchema = z.object({
 export const Route = createFileRoute("/_app/albums/")({
 	validateSearch: albumsSearchSchema,
 	loader: ({ context }) =>
-		context.queryClient.ensureQueryData(albumsQueryOptions()),
+		Promise.all([
+			context.queryClient.ensureQueryData(albumsQueryOptions()),
+			context.queryClient.ensureQueryData(accountUsageQueryOptions()),
+		]),
 	component: AlbumsList,
 });
 
@@ -35,6 +39,14 @@ const EMPTY_GROUP_MESSAGE: Record<AlbumGroup, string> = {
 
 function AlbumsList() {
 	const { data: albums } = useSuspenseQuery(albumsQueryOptions());
+	// The same breakdown the home's own total is sliced from (D3), so what
+	// each card shows always adds up to what the home shows. Only the
+	// albums this person owns appear in it -- what a shared album occupies
+	// is its owner's space, and not this viewer's to see.
+	const { data: usage } = useSuspenseQuery(accountUsageQueryOptions());
+	const usedByAlbumId = new Map(
+		usage.albums.map((entry) => [entry.albumId, entry.usedBytes]),
+	);
 	const { group } = Route.useSearch();
 
 	// Split here, not with a second request (D10, task 5.2): the list the
@@ -125,6 +137,8 @@ function AlbumsList() {
 									<p className="text-muted-foreground text-xs">
 										{album.photoCount} photo
 										{album.photoCount === 1 ? "" : "s"}
+										{usedByAlbumId.has(album.id) &&
+											` · ${formatBytes(usedByAlbumId.get(album.id) ?? 0)}`}
 									</p>
 									{album.pendingCount > 0 && (
 										<p className="text-xs font-medium text-primary">

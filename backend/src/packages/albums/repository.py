@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from src.database.client import fetch_all, fetch_one, fetch_val, fetch_val_or_none, write
+from src.database.client import fetch_all, fetch_one, fetch_val, write
 
 from .schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
 
@@ -192,21 +192,6 @@ async def rename_owned_album(
 
 class _PhotoIdRow(BaseModel):
     id: UUID
-
-
-async def lock_owned_album_id(
-    connection: AsyncConnection, *, album_id: UUID, owner_id: UUID
-) -> UUID | None:
-    """Locks the album row for the rest of the transaction (D12, D14):
-    concurrent batches granted for the same album serialize on this lock,
-    so the position each assigns and the occupancy each counts can never
-    be computed from a stale, about-to-change view of the other.
-    """
-    return await fetch_val_or_none(
-        connection,
-        "select id from albums where id = :album_id and owner_id = :owner_id for update",
-        {"album_id": album_id, "owner_id": owner_id},
-    )
 
 
 async def delete_owned_album_returning_photo_ids(

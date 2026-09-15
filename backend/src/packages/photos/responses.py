@@ -4,13 +4,17 @@ from uuid import UUID
 from src.images.factory import image_port
 from src.images.port import Variant
 from src.models import ApiModel
-from src.storage.port import UploadGrant, object_key
+from src.storage.port import object_key
 
 from .schemas import (
     AvailablePhotoRow,
     ConfirmationOutcome,
+    DenialReason,
+    DeniedFile,
     GalleryCounts,
     GalleryResult,
+    GrantBatchResult,
+    GrantedFile,
     PhotoWithRatingRow,
 )
 
@@ -42,22 +46,62 @@ class PhotoResponse(ApiModel):
 class PhotoGrantResponse(ApiModel):
     """What the client applies verbatim to perform its direct upload
     (object-storage spec): the grant, plus the id the client presents
-    back at confirmation time."""
+    back at confirmation time, plus the index the file had in the request
+    (D4) -- with a batch that can be granted only in part, position in
+    the response no longer identifies which file this answers for."""
 
+    index: int
     photo_id: UUID
     position: int
     upload_url: str
     upload_headers: dict[str, str]
 
     @classmethod
-    def from_grant(
-        cls, *, photo_id: UUID, position: int, grant: UploadGrant
-    ) -> "PhotoGrantResponse":
+    def from_granted(cls, granted: GrantedFile) -> "PhotoGrantResponse":
         return cls(
-            photo_id=photo_id,
-            position=position,
-            upload_url=grant.url,
-            upload_headers=grant.headers,
+            index=granted.index,
+            photo_id=granted.photo_id,
+            position=granted.position,
+            upload_url=granted.grant.url,
+            upload_headers=granted.grant.headers,
+        )
+
+
+class PhotoDenialResponse(ApiModel):
+    """One file the batch asked for and did not get (photo-upload spec):
+    which of the two capacity limits stopped it, and how much was left of
+    that one. Exactly one of the two `remaining` fields is filled in --
+    the one the reason is about -- because slots and bytes are not the
+    same unit and a single number would leave which one implied."""
+
+    index: int
+    reason: DenialReason
+    remaining_photos: int | None = None
+    remaining_bytes: int | None = None
+
+    @classmethod
+    def from_denied(cls, denied: DeniedFile) -> "PhotoDenialResponse":
+        return cls(
+            index=denied.index,
+            reason=denied.reason,
+            remaining_photos=denied.remaining_photos,
+            remaining_bytes=denied.remaining_bytes,
+        )
+
+
+class GrantBatchResponse(ApiModel):
+    """The answer to a batch of grant requests (D4): two lists, never one
+    as long as the request. A client that asked for N reads what it got
+    and what it didn't, instead of assuming it got N."""
+
+    granted: list[PhotoGrantResponse]
+    denied: list[PhotoDenialResponse]
+
+    @classmethod
+    def from_result(cls, result: GrantBatchResult) -> "GrantBatchResponse":
+        return cls(
+            granted=[PhotoGrantResponse.from_granted(item) for item in result.granted],
+            denied=[PhotoDenialResponse.from_denied(item) for item in result.denied],
         )
 
 

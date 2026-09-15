@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from src.exceptions import (
     ForbiddenError,
     NotFoundError,
+    StateConflictError,
     UnauthenticatedError,
     ValidationFailedError,
 )
@@ -53,6 +54,18 @@ def _build_app() -> FastAPI:
     @app.get("/bad-field")
     def bad_field():
         raise ValidationFailedError("email", "must be a valid address")
+
+    # Covered here rather than through a domain endpoint: no flow raises
+    # this today -- add-account-quota turned the one that did, a batch
+    # that doesn't fit, into a partial grant -- and the shape a state
+    # conflict answers with is still the API's own contract
+    # (api-conventions spec), so it keeps being exercised where the rest
+    # of the handlers are.
+    @app.get("/conflicted")
+    def conflicted():
+        raise StateConflictError(
+            "out_of_room", "there is room for 1 more", details={"remaining": 1}
+        )
 
     @app.post("/echo")
     def echo(payload: _Widget) -> Envelope[_Widget]:
@@ -152,3 +165,17 @@ def test_an_unmatched_route_still_comes_back_in_the_project_shape():
     assert response.status_code == 404
     body = response.json()
     assert set(body.keys()) == {"data", "error"}
+
+
+def test_a_state_conflict_is_not_presented_as_a_validation_failure():
+    """A state conflict is resolved by changing the resource and retrying
+    the same request, a validation failure by changing the request
+    (api-conventions spec) -- so they answer with different statuses, and
+    the conflict names no field."""
+    response = _client().get("/conflicted")
+
+    assert response.status_code == 409
+    error = response.json()["error"]
+    assert error["code"] == "out_of_room"
+    assert error["field"] is None
+    assert error["details"] == {"remaining": 1}
