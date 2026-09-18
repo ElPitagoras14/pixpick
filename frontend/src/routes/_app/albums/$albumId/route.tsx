@@ -24,16 +24,26 @@ function AlbumLayout() {
 	const { data: album } = useSuspenseQuery(albumQueryOptions(albumId));
 	const matchRoute = useMatchRoute();
 	// The upload view is its own flow, not a place to jump to Share or to
-	// "Upload photos" again: its own "← Back to album" link is the one
-	// back link that belongs there, replacing this layout's "← Albums"
-	// rather than sitting above it.
+	// "Upload photos" again. What that changes about the back link is
+	// where it points, not whether it exists (D1): it is drawn here for
+	// every subview, above the title, the way it is on every other screen
+	// -- so there can never be two of them, or one below the title.
 	const isUploadView = !!matchRoute({ to: "/albums/$albumId/upload" });
 
 	return (
 		<div className="mx-auto max-w-3xl p-6">
 			<div className="mb-6 flex items-center justify-between gap-4">
 				<div>
-					{!isUploadView && (
+					{isUploadView ? (
+						<Link
+							to="/albums/$albumId"
+							params={{ albumId }}
+							search={{ filter: "all" }}
+							className="text-muted-foreground text-xs"
+						>
+							← Back to album
+						</Link>
+					) : (
 						<Link
 							to="/albums"
 							search={{ group: "own" }}
