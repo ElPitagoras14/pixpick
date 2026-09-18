@@ -15,6 +15,11 @@ export interface AlbumSummary {
 	photoCount: number;
 	coverUrl: string | null;
 	pendingCount: number;
+	// The instant the album stops existing (album-retention spec), as an
+	// ISO timestamp: the backend sends the instant itself, never a
+	// rendered string or a day count, and turning it into either one is
+	// this client's job -- see `remainingTimeLabel`.
+	expiresAt: string;
 }
 
 export interface Album {
@@ -23,6 +28,24 @@ export interface Album {
 	description: string | null;
 	isOwner: boolean;
 	pendingCount: number;
+	expiresAt: string;
+}
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+// Turns the backend's raw instant into what someone reads (task 5.2,
+// D6): the day it falls into from *now*, not a rounded duration --
+// something confirmed a minute ago reads "today", not "in 0 days".
+// Shown to the owner and to anyone with a shared link alike (task
+// 5.2): both need to know how long the album -- and their chance to
+// finish rating it -- has left.
+export function remainingTimeLabel(expiresAt: string): string {
+	const daysRemaining = Math.ceil(
+		(new Date(expiresAt).getTime() - Date.now()) / DAY_IN_MS,
+	);
+	if (daysRemaining <= 0) return "Expires today";
+	if (daysRemaining === 1) return "Expires tomorrow";
+	return `Expires in ${daysRemaining} days`;
 }
 
 async function fetchAlbums(): Promise<AlbumSummary[]> {

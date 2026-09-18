@@ -147,7 +147,7 @@ def fake_storage(monkeypatch):
     fake = FakeStoragePort()
     monkeypatch.setattr("src.packages.albums.service.storage_port", fake)
     monkeypatch.setattr("src.packages.photos.service.storage_port", fake)
-    monkeypatch.setattr("src.packages.photos.reconcile.storage_port", fake)
+    monkeypatch.setattr("src.maintenance.reconcile.storage_port", fake)
 
     async def _no_op_warm_up(object_keys):
         return None

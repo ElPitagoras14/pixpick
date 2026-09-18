@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
-import { albumQueryOptions } from "@/features/albums/api";
+import { albumQueryOptions, remainingTimeLabel } from "@/features/albums/api";
 import { ShareDialog } from "@/features/shares/ShareDialog";
 
 // The album is loaded once, here (D11): the grid, the upload view, and
@@ -56,6 +56,9 @@ function AlbumLayout() {
 					{album.description && (
 						<p className="text-muted-foreground text-sm">{album.description}</p>
 					)}
+					<p className="text-muted-foreground text-xs">
+						{remainingTimeLabel(album.expiresAt)}
+					</p>
 				</div>
 				{!isUploadView && (
 					<div className="flex items-center gap-2">

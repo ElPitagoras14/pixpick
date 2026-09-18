@@ -52,14 +52,22 @@ async def revoke_link(connection: AsyncConnection, *, album_id: UUID) -> None:
 async def enter(connection: AsyncConnection, *, token: str, user_id: UUID) -> UUID:
     """Validates the token and grants membership in the same operation
     (D4: this SHALL only ever be reached through a write, never a plain
-    navigation -- see the router). A token that's unknown, revoked, or
-    foreign to any album all raise the same `NotFoundError` (album-sharing
-    spec). Entering twice with the same token is a no-op, not a second
+    navigation -- see the router). A token that's unknown, revoked,
+    foreign to any album, or that points at one that has expired
+    (album-retention spec) all raise the same `NotFoundError`
+    (album-sharing spec). Entering twice with the same token is a no-op,
+    not a second
     membership row (`repository.add_member` in the albums package is what
     makes that idempotent).
     """
     album_id = await repository.get_live_album_id_by_token(connection, token=token)
     if album_id is None:
+        raise NotFoundError()
+    # An expired album's row and its live token can both still exist
+    # (D3 in album-retention's design defers the physical delete), so
+    # the token alone isn't enough: entering SHALL answer the same way
+    # for an expired album as for one that was never there at all.
+    if not await albums_repository.album_exists(connection, album_id=album_id):
         raise NotFoundError()
     await albums_repository.add_member(connection, album_id=album_id, user_id=user_id)
     return album_id

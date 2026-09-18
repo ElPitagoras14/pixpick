@@ -1,8 +1,10 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from src.packages.albums import repository
+from src.packages.albums.config import albums_settings
 from tests.authhelpers import log_in
 from tests.factories import (
     create_album,
@@ -68,6 +70,27 @@ async def test_the_owner_can_view_their_album(client, connection):
     assert response.status_code == 200
     assert response.json()["data"]["title"] == "Mine"
     assert response.json()["data"]["isOwner"] is True
+
+
+async def test_the_album_response_carries_the_instant_it_expires_not_rendered_text(
+    client, connection, monkeypatch
+):
+    """5.1: the backend sends the expiry as a timestamp, both in the
+    list and in the single album's own response, for the client to
+    turn into text -- never text itself (album-retention spec, D6).
+    """
+    monkeypatch.setattr(albums_settings, "album_retention_days", 30)
+    owner = await log_in(client, connection)
+    renewed_at = datetime.now(UTC) - timedelta(days=5)
+    album = await create_album(connection, owner_id=owner.id, renewed_at=renewed_at)
+    expected = renewed_at + timedelta(days=30)
+
+    detail = client.get(f"/api/albums/{album.id}").json()["data"]
+    listing = client.get("/api/albums").json()["data"][0]
+
+    for expires_at in (detail["expiresAt"], listing["expiresAt"]):
+        parsed = datetime.fromisoformat(expires_at)
+        assert abs((parsed - expected).total_seconds()) < 1
 
 
 async def test_a_member_can_view_an_album_they_do_not_own(client, connection):

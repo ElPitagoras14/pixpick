@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_all, fetch_val, fetch_val_or_none, write, write_many
+from src.packages.albums.repository import ACTIVE_CONDITION, retention_params
 
 from .schemas import (
     AvailablePhotoRow,
@@ -134,7 +135,9 @@ async def get_owned_photos(
     never granted against (D4).
     """
     owner_id_of_album = await fetch_val_or_none(
-        connection, "select owner_id from albums where id = :album_id", {"album_id": album_id}
+        connection,
+        f"select a.owner_id from albums a where a.id = :album_id and {ACTIVE_CONDITION}",
+        {"album_id": album_id, **retention_params()},
     )
     if owner_id_of_album is None or owner_id_of_album != owner_id:
         return None

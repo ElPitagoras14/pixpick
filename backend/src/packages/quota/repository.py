@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_all, fetch_val
+from src.packages.albums.repository import ACTIVE_CONDITION, retention_params
 
 from .schemas import AlbumUsageRow, PhotoUsageRow
 
@@ -37,9 +38,9 @@ async def account_used_bytes(connection: AsyncConnection, *, owner_id: UUID) -> 
         select coalesce(sum({_COUNTED_BYTES}), 0)
         from photos p
         join albums a on a.id = p.album_id
-        where a.owner_id = :owner_id and {_COUNTED}
+        where a.owner_id = :owner_id and {_COUNTED} and {ACTIVE_CONDITION}
         """,
-        {"owner_id": owner_id},
+        {"owner_id": owner_id, **retention_params()},
     )
     return int(total)
 
@@ -58,12 +59,12 @@ async def account_usage_by_album(
         select a.id as album_id, coalesce(sum({_COUNTED_BYTES}), 0) as used_bytes
         from albums a
         left join photos p on p.album_id = a.id and {_COUNTED}
-        where a.owner_id = :owner_id
+        where a.owner_id = :owner_id and {ACTIVE_CONDITION}
         group by a.id
         order by a.created_at desc, a.id desc
         """,
         AlbumUsageRow,
-        {"owner_id": owner_id},
+        {"owner_id": owner_id, **retention_params()},
     )
 
 

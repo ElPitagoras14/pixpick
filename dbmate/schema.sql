@@ -55,7 +55,8 @@ CREATE TABLE public.albums (
     title text NOT NULL,
     description text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    renewed_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -448,4 +449,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('0001'),
     ('0002'),
     ('0003'),
-    ('0004');
+    ('0004'),
+    ('0005');

@@ -78,6 +78,7 @@ services:
       IMAGEKIT_PRIVATE_KEY: ${IMAGEKIT_PRIVATE_KEY}
       ALBUM_MAX_PHOTOS: ${ALBUM_MAX_PHOTOS}
       ACCOUNT_MAX_BYTES: ${ACCOUNT_MAX_BYTES}
+      ALBUM_RETENTION_DAYS: ${ALBUM_RETENTION_DAYS}
     depends_on:
       migrate:
         condition: service_completed_successfully

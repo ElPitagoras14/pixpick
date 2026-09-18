@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
+from src.packages.albums.config import albums_settings
 from src.packages.photos import repository
 from src.packages.photos import service as photos_service
 from src.packages.photos.schemas import GrantFileInput
@@ -204,6 +205,25 @@ async def test_granting_for_a_foreign_album_responds_like_a_nonexistent_one(
     )
 
     assert response.status_code == 404
+
+
+async def test_granting_for_an_expired_album_responds_like_a_nonexistent_one(
+    client, connection, fake_storage, monkeypatch
+):
+    """album-retention spec: asking for upload permissions on an album
+    whose plazo already ran out answers exactly like a nonexistent
+    album, the same as the foreign-album case above.
+    """
+    monkeypatch.setattr(albums_settings, "album_retention_days", 30)
+    owner = await log_in(client, connection)
+    expired = await create_album(
+        connection, owner_id=owner.id, renewed_at=datetime.now(UTC) - timedelta(days=31)
+    )
+
+    response = client.post(f"/api/albums/{expired.id}/photos/grants", json={"files": [_ONE_FILE]})
+
+    assert response.status_code == 404
+    assert fake_storage._grants == {}
 
 
 async def test_listing_photos_only_shows_available_ones(client, connection):
