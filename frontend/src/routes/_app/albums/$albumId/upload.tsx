@@ -1,14 +1,14 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { ImagePlusIcon } from "lucide-react";
 import { type ChangeEvent, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
-	type UploadItemStatus,
-	useUploadQueue,
-} from "@/features/photos/uploadQueue";
+	UploadItemCard,
+	uploadOutcomeOf,
+} from "@/features/photos/UploadItemCard";
+import { type UploadItem, useUploadQueue } from "@/features/photos/uploadQueue";
 import { accountUsageQueryOptions, formatBytes } from "@/features/quota/api";
 
 export const Route = createFileRoute("/_app/albums/$albumId/upload")({
@@ -17,16 +17,22 @@ export const Route = createFileRoute("/_app/albums/$albumId/upload")({
 	component: UploadView,
 });
 
-const STATUS_LABEL: Record<UploadItemStatus, string> = {
-	queued: "Waiting…",
-	uploading: "Uploading…",
-	confirming: "Confirming…",
-	available: "Uploaded",
-	pending: "Waiting for upload to finish",
-	rejected: "Rejected",
-	denied: "Not enough room",
-	failed: "Failed",
-};
+/** How the batch went, without having to count it (D6). It sits above
+ * the list and the list itself never moves: the order photos were picked
+ * in is what lets someone find one among fifty, and reordering under the
+ * eyes of whoever is watching costs more than a scroll. */
+function summarize(items: UploadItem[]) {
+	let done = 0;
+	let failed = 0;
+	let running = 0;
+	for (const item of items) {
+		const outcome = uploadOutcomeOf(item.status);
+		if (outcome === "done") done += 1;
+		else if (outcome === "failed") failed += 1;
+		else running += 1;
+	}
+	return { done, failed, running };
+}
 
 function UploadView() {
 	const { albumId } = Route.useParams();
@@ -34,6 +40,7 @@ function UploadView() {
 	const { data: usage } = useSuspenseQuery(accountUsageQueryOptions());
 	const inputRef = useRef<HTMLInputElement>(null);
 	const remaining = Math.max(usage.limitBytes - usage.usedBytes, 0);
+	const summary = summarize(items);
 
 	function handleFilesSelected(event: ChangeEvent<HTMLInputElement>) {
 		const files = event.target.files;
@@ -46,14 +53,6 @@ function UploadView() {
 
 	return (
 		<div>
-			<Link
-				to="/albums/$albumId"
-				params={{ albumId }}
-				search={{ filter: "all" }}
-				className="text-muted-foreground mb-4 inline-block text-xs"
-			>
-				← Back to album
-			</Link>
 			<input
 				ref={inputRef}
 				type="file"
@@ -90,35 +89,39 @@ function UploadView() {
 			</div>
 
 			{items.length > 0 && (
-				<ul className="mt-6 flex flex-col gap-3">
-					{items.map((item) => (
-						<li key={item.id} className="flex items-center gap-3">
-							<span className="flex-1 truncate text-sm">{item.file.name}</span>
-							<span
-								className={
-									item.status === "denied"
-										? "text-destructive w-40 shrink-0 text-xs"
-										: "text-muted-foreground w-40 shrink-0 text-xs"
-								}
-							>
-								{item.status === "uploading" ? (
-									<Progress value={item.progress} />
-								) : (
-									(item.error ?? STATUS_LABEL[item.status])
-								)}
+				<>
+					<div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+						<span className="font-medium">
+							{items.length} file{items.length === 1 ? "" : "s"}
+						</span>
+						<span className="text-muted-foreground">
+							{summary.done} uploaded
+						</span>
+						<span
+							className={
+								summary.failed > 0
+									? "text-destructive"
+									: "text-muted-foreground"
+							}
+						>
+							{summary.failed} didn't finish
+						</span>
+						{summary.running > 0 && (
+							<span className="text-muted-foreground">
+								{summary.running} in progress
 							</span>
-							{(item.status === "failed" || item.status === "denied") && (
-								<Button
-									size="sm"
-									variant="outline"
-									onClick={() => retry(item.id)}
-								>
-									Retry
-								</Button>
-							)}
-						</li>
-					))}
-				</ul>
+						)}
+					</div>
+					<ul className="mt-2 flex flex-col gap-2">
+						{items.map((item) => (
+							<UploadItemCard
+								key={item.id}
+								item={item}
+								onRetry={() => retry(item.id)}
+							/>
+						))}
+					</ul>
+				</>
 			)}
 		</div>
 	);
