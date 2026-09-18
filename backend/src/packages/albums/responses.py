@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from src.images.factory import image_port
@@ -5,7 +6,18 @@ from src.images.port import Variant
 from src.models import ApiModel
 from src.storage.port import object_key
 
+from .config import albums_settings
 from .schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
+
+
+def _expires_at(renewed_at: datetime) -> datetime:
+    """The instant an album stops existing (album-retention spec, D6
+    in that change's design): sent as the instant itself, never as a
+    rendered string or a day count -- the client is what decides how to
+    say it, exactly as it already does for every other date the API
+    returns.
+    """
+    return renewed_at + timedelta(days=albums_settings.album_retention_days)
 
 
 class AlbumResponse(ApiModel):
@@ -36,6 +48,7 @@ class AlbumDetailResponse(ApiModel):
     description: str | None = None
     is_owner: bool
     pending_count: int
+    expires_at: datetime
 
     @classmethod
     def from_row(cls, row: AlbumDetailRow, *, viewer_id: UUID) -> "AlbumDetailResponse":
@@ -45,6 +58,7 @@ class AlbumDetailResponse(ApiModel):
             description=row.description,
             is_owner=row.owner_id == viewer_id,
             pending_count=row.pending_count,
+            expires_at=_expires_at(row.renewed_at),
         )
 
 
@@ -64,6 +78,7 @@ class AlbumSummaryResponse(ApiModel):
     photo_count: int
     cover_url: str | None = None
     pending_count: int
+    expires_at: datetime
 
     @classmethod
     def from_row(cls, row: AlbumListRow) -> "AlbumSummaryResponse":
@@ -79,4 +94,5 @@ class AlbumSummaryResponse(ApiModel):
             photo_count=row.photo_count,
             cover_url=cover_url,
             pending_count=row.pending_count,
+            expires_at=_expires_at(row.renewed_at),
         )

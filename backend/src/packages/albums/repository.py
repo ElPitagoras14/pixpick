@@ -5,7 +5,32 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.client import fetch_all, fetch_one, fetch_val, write
 
+from .config import albums_settings
 from .schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
+
+# The one condition every read of `albums` composes (D2 in
+# album-retention's design): true while the instant its last photo
+# renewed it, plus the configured plazo, still lies in the future.
+# `available_photos` solves the equivalent problem for photos with a
+# view; a view can't do it here, since the plazo is a runtime setting
+# and a view takes no parameters, so this string is the one place that
+# gap is closed instead -- every query below, and every other package
+# that reads `albums`, composes it from here rather than writing its
+# own. `test_album_retention_condition.py` is what keeps a later query
+# honest. Assumes the table is aliased `a`.
+#
+# The interval is built from a cast, not `make_interval`: that
+# function's `days` parameter is an integer in Postgres, and the plazo
+# is a `float` precisely so a real end-to-end test (task 6.1) can set
+# it to a couple of minutes -- a fraction of a day. The interval
+# literal parser accepts that fraction directly.
+ACTIVE_CONDITION = "(a.renewed_at + (:album_retention_days || ' days')::interval > now())"
+
+
+def retention_params() -> dict:
+    """The bind parameter `ACTIVE_CONDITION` needs, merged into a
+    query's own params wherever the condition is used."""
+    return {"album_retention_days": albums_settings.album_retention_days}
 
 
 async def insert_album(
@@ -39,13 +64,13 @@ async def get_owned_album(
     """
     return await fetch_one(
         connection,
-        """
-        select id, owner_id, title, description, created_at, updated_at
-        from albums
-        where id = :album_id and owner_id = :owner_id
+        f"""
+        select a.id, a.owner_id, a.title, a.description, a.created_at, a.updated_at
+        from albums a
+        where a.id = :album_id and a.owner_id = :owner_id and {ACTIVE_CONDITION}
         """,
         AlbumRecord,
-        {"album_id": album_id, "owner_id": owner_id},
+        {"album_id": album_id, "owner_id": owner_id, **retention_params()},
     )
 
 
@@ -62,12 +87,13 @@ async def list_member_albums(connection: AsyncConnection, *, user_id: UUID) -> l
     """
     return await fetch_all(
         connection,
-        """
+        f"""
         select
             a.id,
             a.title,
             a.description,
             a.created_at,
+            a.renewed_at,
             (a.owner_id = :user_id) as is_owner,
             coalesce(agg.photo_count, 0) as photo_count,
             agg.cover_photo_id,
@@ -87,10 +113,11 @@ async def list_member_albums(connection: AsyncConnection, *, user_id: UUID) -> l
             from available_photos p
             where p.album_id = a.id
         ) agg on true
+        where {ACTIVE_CONDITION}
         order by a.created_at desc, a.id desc
         """,
         AlbumListRow,
-        {"user_id": user_id},
+        {"user_id": user_id, **retention_params()},
     )
 
 
@@ -110,9 +137,9 @@ async def get_accessible_album(
     """
     return await fetch_one(
         connection,
-        """
+        f"""
         select
-            a.id, a.owner_id, a.title, a.description, a.created_at, a.updated_at,
+            a.id, a.owner_id, a.title, a.description, a.created_at, a.updated_at, a.renewed_at,
             coalesce(pending.count, 0) as pending_count
         from albums a
         join album_members m on m.album_id = a.id and m.user_id = :user_id
@@ -125,10 +152,10 @@ async def get_accessible_album(
                   where r.photo_id = p.id and r.user_id = :user_id
               )
         ) pending on true
-        where a.id = :album_id
+        where a.id = :album_id and {ACTIVE_CONDITION}
         """,
         AlbumDetailRow,
-        {"album_id": album_id, "user_id": user_id},
+        {"album_id": album_id, "user_id": user_id, **retention_params()},
     )
 
 
@@ -146,6 +173,32 @@ async def add_member(connection: AsyncConnection, *, album_id: UUID, user_id: UU
         on conflict (album_id, user_id) do nothing
         """,
         {"album_id": album_id, "user_id": user_id},
+    )
+
+
+async def album_exists(connection: AsyncConnection, *, album_id: UUID) -> bool:
+    """Whether `album_id` names an album that hasn't expired -- the
+    check a share link's token resolves against (album-retention spec):
+    entering through a link to an expired album SHALL NOT grant access,
+    the same rule every other read of `albums` already applies.
+    """
+    return await fetch_val(
+        connection,
+        f"select exists(select 1 from albums a where a.id = :album_id and {ACTIVE_CONDITION})",
+        {"album_id": album_id, **retention_params()},
+    )
+
+
+async def touch_renewed_at(connection: AsyncConnection, *, album_id: UUID) -> None:
+    """Restarts the album's plazo from now (D4 in album-retention's
+    design): called only from the same transaction that marks a photo
+    available, never on its own, so the two either both commit or both
+    roll back together.
+    """
+    await write(
+        connection,
+        "update albums set renewed_at = now() where id = :album_id",
+        {"album_id": album_id},
     )
 
 
@@ -205,8 +258,13 @@ async def delete_owned_album_returning_photo_ids(
     """
     exists = await fetch_val(
         connection,
-        "select exists(select 1 from albums where id = :album_id and owner_id = :owner_id)",
-        {"album_id": album_id, "owner_id": owner_id},
+        f"""
+        select exists(
+            select 1 from albums a
+            where a.id = :album_id and a.owner_id = :owner_id and {ACTIVE_CONDITION}
+        )
+        """,
+        {"album_id": album_id, "owner_id": owner_id, **retention_params()},
     )
     if not exists:
         return None
@@ -222,3 +280,40 @@ async def delete_owned_album_returning_photo_ids(
         {"album_id": album_id, "owner_id": owner_id},
     )
     return [row.id for row in photo_rows]
+
+
+class _ExpiredPhotoKey(BaseModel):
+    """Just enough to derive an object key -- the same shape
+    `photos.repository.expired_pending_photo_ids` returns for
+    reconciliation's other half."""
+
+    id: UUID
+    album_id: UUID
+
+
+async def delete_expired_albums_returning_photo_keys(
+    connection: AsyncConnection,
+) -> list[_ExpiredPhotoKey]:
+    """Deletes every album whose plazo has run out, and with it --
+    through the same cascade a manual delete already relies on -- every
+    one of its photos (D3 in album-retention's design). Returns the
+    keys their objects need to be removed under, so the caller can do
+    that *after* this transaction commits (D6), the same ordering
+    `delete_owned_album_returning_photo_ids` and reconciliation's own
+    upload cleanup both already use.
+    """
+    photo_rows = await fetch_all(
+        connection,
+        f"""
+        select p.id, p.album_id
+        from photos p
+        join albums a on a.id = p.album_id
+        where not {ACTIVE_CONDITION}
+        """,
+        _ExpiredPhotoKey,
+        retention_params(),
+    )
+    await write(
+        connection, f"delete from albums a where not {ACTIVE_CONDITION}", retention_params()
+    )
+    return photo_rows

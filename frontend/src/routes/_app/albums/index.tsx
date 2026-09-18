@@ -3,7 +3,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
-import { type AlbumSummary, albumsQueryOptions } from "@/features/albums/api";
+import {
+	type AlbumSummary,
+	albumsQueryOptions,
+	remainingTimeLabel,
+} from "@/features/albums/api";
 import { accountUsageQueryOptions, formatBytes } from "@/features/quota/api";
 import { cn } from "@/lib/utils";
 
@@ -145,6 +149,9 @@ function AlbumsList() {
 											{album.pendingCount} to rate
 										</p>
 									)}
+									<p className="text-muted-foreground text-xs">
+										{remainingTimeLabel(album.expiresAt)}
+									</p>
 								</div>
 							</Link>
 						</li>

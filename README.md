@@ -127,7 +127,7 @@ Do these three steps in this order. Do not change the provider first.
 2. Check what is still missing:
    ```bash
    cd backend
-   uv run python -m src.packages.photos.reconcile --against r2
+   uv run python -m src.maintenance.reconcile --against r2
    ```
    It lists the objects the new provider does not have yet. Copy again and check again until the list is empty.
 3. Change `STORAGE_PROVIDER` and restart.
@@ -160,12 +160,14 @@ docker run --rm --network pixpick_pixpick --entrypoint sh \
 
 Change the user and the password if you changed them in `.env`.
 
-An upload that never finishes leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows it. Clean it up when you want:
+An upload that never finishes, or an album whose plazo has run out, leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows either one. Clean it up when you want:
 
 ```bash
 cd backend
-uv run python -m src.packages.photos.reconcile
+uv run python -m src.maintenance.reconcile
 ```
+
+Running it discards both: abandoned uploads and expired albums, with their photos and objects. Not running it costs nothing but space at the storage provider — nobody can see or count against their quota what it would have discarded.
 
 ## Run the tests
 

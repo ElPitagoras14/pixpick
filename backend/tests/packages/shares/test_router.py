@@ -1,7 +1,9 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from src.config import settings
 from src.packages.albums import repository as albums_repository
+from src.packages.albums.config import albums_settings
 from src.packages.shares import repository as shares_repository
 from tests.authhelpers import log_in
 from tests.factories import create_album, create_membership, create_share_token, create_user
@@ -120,6 +122,33 @@ async def test_unknown_revoked_and_foreign_tokens_answer_identically(client, con
 
     assert unknown_response.status_code == revoked_response.status_code == 404
     assert unknown_response.json() == revoked_response.json() == foreign_response.json()
+
+
+async def test_entering_an_expired_album_answers_like_an_unknown_token(
+    client, connection, monkeypatch
+):
+    """album-retention spec: the album's row and its live token can
+    both still exist -- the physical delete is deferred (D3) -- but
+    entering SHALL respond exactly as it does for a token that never
+    existed, and SHALL NOT grant membership.
+    """
+    monkeypatch.setattr(albums_settings, "album_retention_days", 30)
+    owner = await create_user(connection)
+    album = await create_album(
+        connection, owner_id=owner.id, renewed_at=datetime.now(UTC) - timedelta(days=31)
+    )
+    _, token = await create_share_token(connection, album_id=album.id)
+    entrant = await log_in(client, connection)
+
+    unknown_response = client.post(f"/api/shares/{uuid.uuid4()}")
+    expired_response = client.post(f"/api/shares/{token}")
+
+    assert expired_response.status_code == unknown_response.status_code == 404
+    assert expired_response.json() == unknown_response.json()
+    assert (
+        await albums_repository.is_member(connection, album_id=album.id, user_id=entrant.id)
+        is False
+    )
 
 
 async def test_entering_grants_membership(client, connection):

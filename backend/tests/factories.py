@@ -110,21 +110,32 @@ async def create_album(
     owner_id: UUID,
     title: str = "Test Album",
     description: str | None = None,
+    renewed_at: datetime | None = None,
 ) -> AlbumRow:
     """Also makes `owner_id` a member (album-sharing spec: creating an
     album does this in production too), so a test that only cares about
     ownership never has to declare the membership its own invariants
     already assume.
+
+    `renewed_at` defaults to the column's own `now()` default, like a
+    freshly created album; pass one in the past (album-retention spec)
+    to build an album that has already expired under the configured
+    plazo, without needing to wait for one or fake the clock.
     """
     row = await fetch_one(
         connection,
         """
-        insert into albums (owner_id, title, description)
-        values (:owner_id, :title, :description)
+        insert into albums (owner_id, title, description, renewed_at)
+        values (:owner_id, :title, :description, coalesce(:renewed_at, now()))
         returning id
         """,
         AlbumRow,
-        {"owner_id": owner_id, "title": title, "description": description},
+        {
+            "owner_id": owner_id,
+            "title": title,
+            "description": description,
+            "renewed_at": renewed_at,
+        },
     )
     assert row is not None
     await create_membership(connection, album_id=row.id, user_id=owner_id)

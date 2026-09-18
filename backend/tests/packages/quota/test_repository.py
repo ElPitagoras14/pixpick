@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+from src.packages.albums.config import albums_settings
 from src.packages.quota import repository
 from tests.factories import create_album, create_photo, create_user
 
@@ -71,3 +72,20 @@ async def test_the_breakdown_adds_up_to_the_total_and_each_album_to_its_photos(c
         photos = await repository.album_usage(connection, album_id=album.id)
         expected = next(row.used_bytes for row in by_album if row.album_id == album.id)
         assert sum(photo.size_bytes for photo in photos) == expected
+
+
+async def test_an_expired_album_stops_counting_against_the_account(connection, monkeypatch):
+    """D5 in album-retention's design: the account's usage is a read of
+    `albums` like any other, so it composes the same retention
+    condition -- an expired album's photos stop counting the instant
+    it expires, with none of its objects ever deleted here.
+    """
+    monkeypatch.setattr(albums_settings, "album_retention_days", 30)
+    owner = await create_user(connection)
+    expired = await create_album(
+        connection, owner_id=owner.id, renewed_at=datetime.now(UTC) - timedelta(days=31)
+    )
+    await create_photo(connection, album_id=expired.id, declared_size=5_000, size=5_000)
+
+    assert await repository.account_used_bytes(connection, owner_id=owner.id) == 0
+    assert await repository.account_usage_by_album(connection, owner_id=owner.id) == []

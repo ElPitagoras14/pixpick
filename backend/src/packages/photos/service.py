@@ -226,6 +226,10 @@ async def confirm_batch(
 
         async with transaction() as connection:
             await repository.mark_photo_available(connection, photo_id=photo.id, size=metadata.size)
+            # D4 in album-retention's design: the same transaction that
+            # makes the photo available restarts its album's plazo, so
+            # a confirmation that rolls back never moves it either.
+            await albums_repository.touch_renewed_at(connection, album_id=photo.album_id)
         results.append(ConfirmationOutcome(photo_id=photo.id, status="available"))
         warm_up_keys.append(key)
 

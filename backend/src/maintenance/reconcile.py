@@ -1,14 +1,19 @@
-"""D8: a command, run whenever it's useful, not a permanent process --
-what it discards is invisible to everyone until then (Risks in this
-change's design), so there's no urgency that would justify a schedule.
+"""D8 in add-albums-and-upload, extended by D3 in album-retention: a
+command, run whenever it's useful, not a permanent process. What it
+discards is invisible to everyone until then (Risks in both changes'
+designs), so there's no urgency that would justify a schedule.
 
-    uv run python -m src.packages.photos.reconcile
+    uv run python -m src.maintenance.reconcile
 
 Also the migration check a storage provider change relies on (D6 in
 add-cloud-media-adapters): run with `--against` to report which objects a
 destination provider is still missing, instead of discarding anything.
 
-    uv run python -m src.packages.photos.reconcile --against r2
+    uv run python -m src.maintenance.reconcile --against r2
+
+Lives in this package of its own, not inside `packages.photos` (D3 in
+album-retention's design): what it discards now spans photos and whole
+albums, and neither one is the other's to contain.
 """
 
 import asyncio
@@ -20,10 +25,10 @@ import typer
 from src.database.utils import transaction
 from src.log import logger
 from src.loop import loop_factory
+from src.packages.albums import repository as albums_repository
+from src.packages.photos import repository as photos_repository
 from src.storage.factory import build_storage_port, storage_port
 from src.storage.port import object_key
-
-from . import repository
 
 
 class Provider(StrEnum):
@@ -35,17 +40,30 @@ class Provider(StrEnum):
 
 
 async def reconcile() -> None:
-    """Discards every photo still not available whose upload grant has
-    expired -- an upload that will never complete -- together with the
-    object it may have left behind despite that (photo-upload spec). Rows
-    are deleted and committed first, exactly like every other delete in
-    this project (D6): the object for a row deleted here that never had
-    one simply isn't found, which `delete_objects` treats as nothing to
-    do, not an error.
+    """Discards what's expired and no longer needs to be kept around:
+    every photo still not available whose upload grant has expired --
+    an upload that will never complete -- and every album whose plazo
+    has run out, together with the objects either one may have left
+    behind (photo-upload spec, album-retention spec, D3). Two
+    independent passes, each with its own transaction and its own
+    storage cleanup after it, so a failure discarding albums never
+    stops uploads from being discarded, or the other way around.
+    """
+    await _discard_expired_uploads()
+    await _discard_expired_albums()
+
+
+async def _discard_expired_uploads() -> None:
+    """Rows are deleted and committed first, exactly like every other
+    delete in this project (D6): the object for a row deleted here that
+    never had one simply isn't found, which `delete_objects` treats as
+    nothing to do, not an error.
     """
     async with transaction() as connection:
-        expired = await repository.expired_pending_photo_ids(connection)
-        await repository.delete_photos_by_id(connection, photo_ids=[row.id for row in expired])
+        expired = await photos_repository.expired_pending_photo_ids(connection)
+        await photos_repository.delete_photos_by_id(
+            connection, photo_ids=[row.id for row in expired]
+        )
 
     if not expired:
         logger.info("reconciliation: nothing to discard")
@@ -54,6 +72,23 @@ async def reconcile() -> None:
     keys = [object_key(album_id=str(row.album_id), photo_id=str(row.id)) for row in expired]
     await storage_port.delete_objects(object_keys=keys)
     logger.info(f"reconciliation: discarded {len(expired)} expired pending photo(s)")
+
+
+async def _discard_expired_albums() -> None:
+    """The same ordering as `_discard_expired_uploads` (D6, D3 in
+    album-retention's design): the albums and their photos are gone
+    from the database, committed, before their objects are asked for.
+    """
+    async with transaction() as connection:
+        photo_keys = await albums_repository.delete_expired_albums_returning_photo_keys(connection)
+
+    if not photo_keys:
+        logger.info("reconciliation: no expired albums to discard")
+        return
+
+    keys = [object_key(album_id=str(row.album_id), photo_id=str(row.id)) for row in photo_keys]
+    await storage_port.delete_objects(object_keys=keys)
+    logger.info(f"reconciliation: discarded {len(photo_keys)} photo(s) from expired album(s)")
 
 
 async def check_missing(*, provider: Provider) -> list[str]:
@@ -67,7 +102,7 @@ async def check_missing(*, provider: Provider) -> list[str]:
     """
     target = build_storage_port(provider)
     async with transaction() as connection:
-        rows = await repository.all_available_photo_keys(connection)
+        rows = await photos_repository.all_available_photo_keys(connection)
 
     missing: list[str] = []
     for row in rows:

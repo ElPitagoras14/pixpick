@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useCallback, useState } from "react";
 
-import { albumsQueryOptions } from "@/features/albums/api";
+import { albumQueryOptions, albumsQueryOptions } from "@/features/albums/api";
 import { galleryQueryKeyPrefix } from "@/features/gallery/api";
 import {
 	type ConfirmationStatus,
@@ -287,6 +287,13 @@ export function useUploadQueue(albumId: string) {
 				});
 				queryClient.invalidateQueries({
 					queryKey: albumsQueryOptions().queryKey,
+				});
+				// A photo becoming available restarts the album's plazo
+				// (album-retention spec, task 5.3): the detail query is what
+				// the header's remaining-time label reads, so it's stale the
+				// moment a batch confirms.
+				queryClient.invalidateQueries({
+					queryKey: albumQueryOptions(albumId).queryKey,
 				});
 				// What was just uploaded is what the space meters now have to
 				// account for -- the account's own, and this album's.

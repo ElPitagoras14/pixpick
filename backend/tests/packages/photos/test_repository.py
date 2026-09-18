@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
+from src.database.client import fetch_val
+from src.packages.albums import repository as albums_repository
 from src.packages.photos import repository
 from tests.factories import create_album, create_photo, create_user
 
@@ -146,3 +148,30 @@ async def test_expired_pending_photo_ids_only_returns_unavailable_and_expired(co
     rows = await repository.expired_pending_photo_ids(connection)
 
     assert [row.id for row in rows] == [expired_pending.id]
+
+
+async def test_confirming_and_renewing_roll_back_together(connection):
+    """D4 in album-retention's design: marking a photo available and
+    restarting its album's plazo happen in the same transaction
+    (`photos.service.confirm_batch`); this exercises that transaction's
+    boundary directly, the way `test_data_access.py`'s atomic tests do,
+    a failure that undoes the first SHALL undo the second too.
+    """
+    user = await create_user(connection)
+    original_renewed_at = datetime.now(UTC) - timedelta(days=10)
+    album = await create_album(connection, owner_id=user.id, renewed_at=original_renewed_at)
+    photo = await create_photo(connection, album_id=album.id, available=False)
+
+    savepoint = await connection.begin_nested()
+    await repository.mark_photo_available(connection, photo_id=photo.id, size=123)
+    await albums_repository.touch_renewed_at(connection, album_id=album.id)
+    await savepoint.rollback()
+
+    renewed_at = await fetch_val(
+        connection, "select renewed_at from albums where id = :id", {"id": album.id}
+    )
+    available = await fetch_val(
+        connection, "select available from photos where id = :id", {"id": photo.id}
+    )
+    assert available is False
+    assert abs((renewed_at - original_renewed_at).total_seconds()) < 1
