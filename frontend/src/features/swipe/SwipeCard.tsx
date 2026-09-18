@@ -18,6 +18,12 @@ interface SwipeCardProps {
 	 * `exit()`; the ones behind it are purely decorative. */
 	active: boolean;
 	onDecide: (approved: boolean) => void;
+	/** Opens this photo in the viewer (photo-viewer spec). Fired from the
+	 * drag gesture's own tap, never from a click handler of its own
+	 * (D4): two mechanisms listening to the same finger would each have
+	 * their own idea of where a tap ends and a drag begins, and an
+	 * eight-pixel movement would be settled by whichever reacted first. */
+	onOpen: () => void;
 }
 
 // Not `type: "spring"`: the mini engine runs entirely on the browser's
@@ -32,7 +38,7 @@ const RETURN_ANIMATION = { duration: 0.35, easing: OVERSHOOT_EASE } as const;
 const EXIT_ANIMATION = { duration: 0.3, easing: "ease-out" } as const;
 
 export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
-	function SwipeCard({ photo, active, onDecide }, ref) {
+	function SwipeCard({ photo, active, onDecide, onOpen }, ref) {
 		const cardRef = useRef<HTMLDivElement>(null);
 
 		const playExit = useCallback(
@@ -61,9 +67,16 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
 		// no animation library in between: the card has to track the finger
 		// with zero interpolation, and anything in the middle reads as lag.
 		const bind = useDrag(
-			({ down, movement: [mx, my], velocity: [vx], last }) => {
+			({ down, movement: [mx, my], velocity: [vx], last, tap }) => {
 				const card = cardRef.current;
 				if (!card || !active) return;
+				// The same gesture already separates the two (D4): `tap` is
+				// only ever true for a press that stayed inside the 5px
+				// threshold below, so opening and rating can't both happen.
+				if (tap) {
+					onOpen();
+					return;
+				}
 				if (down) {
 					card.style.transform = `translateX(${mx}px) rotate(${mx / 18}deg)`;
 					return;
@@ -90,7 +103,10 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
 				ref={cardRef}
 				{...(active ? bind() : {})}
 				className={cn(
-					"absolute touch-none overflow-hidden rounded-2xl shadow-xl select-none",
+					// `bg-muted` is what the bands left by the fit are made of:
+					// without it the card would be transparent wherever the
+					// photo's shape doesn't reach its own.
+					"bg-muted absolute touch-none overflow-hidden rounded-2xl shadow-xl select-none",
 					// Tucked in on three sides and extended past the bottom edge
 					// (task 6.7): a `scale()` centered inside the very same
 					// `inset-0` box the active card fills would never actually
@@ -102,11 +118,16 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
 				)}
 				style={{ touchAction: "none" }}
 			>
+				{/* Fits, never fills (D7, photo-rating spec): what is being
+				judged is the whole photo, so a landscape one sits inside
+				the card with bands above and below rather than losing its
+				sides. The card keeps its fixed 3:4 shape, which is what
+				makes the drag feel the same on every photo. */}
 				<img
 					src={photo.ratingUrl}
 					alt=""
 					draggable={false}
-					className="size-full object-cover"
+					className="size-full object-contain"
 				/>
 			</div>
 		);

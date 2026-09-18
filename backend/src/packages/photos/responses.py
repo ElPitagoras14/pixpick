@@ -119,6 +119,13 @@ class GalleryPhotoResponse(ApiModel):
     thumbnail, plus `rating` -- `None` exactly when this viewer hasn't
     rated it yet, and never the same value a rejection would produce
     (photo-rating spec).
+
+    `viewer_url` is the largest variant, carried alongside the thumbnail
+    and never instead of it (photo-viewer spec): the grid keeps drawing
+    the thumbnail, and only opening a photo in the viewer requests this
+    one. Building it costs another signed address and no extra query --
+    the same key the thumbnail is built from, named as another variant.
+    The original is never addressed here, or anywhere else.
     """
 
     id: UUID
@@ -126,6 +133,7 @@ class GalleryPhotoResponse(ApiModel):
     width: int | None = None
     height: int | None = None
     thumbnail_url: str
+    viewer_url: str
     rating: Literal["approved", "rejected"] | None = None
 
     @classmethod
@@ -142,6 +150,7 @@ class GalleryPhotoResponse(ApiModel):
             width=row.width,
             height=row.height,
             thumbnail_url=image_port.variant_url(object_key=key, variant=Variant.THUMBNAIL),
+            viewer_url=image_port.variant_url(object_key=key, variant=Variant.VIEWER),
             rating=rating,
         )
 

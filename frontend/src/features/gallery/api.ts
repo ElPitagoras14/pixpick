@@ -22,6 +22,10 @@ export interface GalleryPhoto {
 	width: number | null;
 	height: number | null;
 	thumbnailUrl: string;
+	// The largest variant, carried next to the thumbnail and requested
+	// only when a photo is actually opened (photo-viewer spec): drawing
+	// the grid costs exactly what it cost before.
+	viewerUrl: string;
 	rating: "approved" | "rejected" | null;
 }
 

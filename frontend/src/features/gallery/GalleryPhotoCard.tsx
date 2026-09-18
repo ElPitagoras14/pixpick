@@ -7,6 +7,10 @@ import { cn } from "@/lib/utils";
 interface GalleryPhotoCardProps {
 	photo: GalleryPhoto;
 	onSetRating: (approved: boolean) => void;
+	/** Opens this photo in the viewer (photo-viewer spec). The rating
+	 * controls sit on top of the image and stop the tap themselves, so
+	 * rating from the grid never opens anything. */
+	onOpen: () => void;
 	stats?: PhotoStats;
 	sizeBytes?: number;
 	onDelete?: () => void;
@@ -26,6 +30,7 @@ interface GalleryPhotoCardProps {
 export function GalleryPhotoCard({
 	photo,
 	onSetRating,
+	onOpen,
 	stats,
 	sizeBytes,
 	onDelete,
@@ -33,14 +38,17 @@ export function GalleryPhotoCard({
 	return (
 		<li className="flex flex-col gap-1">
 			<div className="group relative">
-				<div
-					className="bg-muted overflow-hidden rounded-lg"
-					style={{
-						aspectRatio:
-							photo.width && photo.height
-								? `${photo.width} / ${photo.height}`
-								: "1 / 1",
-					}}
+				{/* Square, never the photo's own ratio (D7): the thumbnail
+				the backend serves is already a deliberate square crop, and
+				a container of any other shape cropped that square a second
+				time. With both square the fill crop has nothing left to
+				remove, and the grid comes out even. Seeing a photo
+				uncropped is what the viewer is for. */}
+				<button
+					type="button"
+					onClick={onOpen}
+					aria-label="Open this photo"
+					className="bg-muted aspect-square w-full overflow-hidden rounded-lg"
 				>
 					<img
 						src={photo.thumbnailUrl}
@@ -48,7 +56,7 @@ export function GalleryPhotoCard({
 						loading="lazy"
 						className="size-full object-cover"
 					/>
-				</div>
+				</button>
 
 				{/* The rating indicator (task 3.3): one small widget in a
 				corner with three visible states -- neither button lit up is

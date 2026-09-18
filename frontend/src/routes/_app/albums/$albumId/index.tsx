@@ -25,12 +25,23 @@ import { GalleryPhotoCard } from "@/features/gallery/GalleryPhotoCard";
 import { GalleryTabs } from "@/features/gallery/GalleryTabs";
 import { useDeletePhoto } from "@/features/photos/api";
 import { albumUsageQueryOptions } from "@/features/quota/api";
+import { PhotoViewer } from "@/features/viewer/PhotoViewer";
+import {
+	VIEWER_SEARCH_PARAM,
+	viewerSearchSchema,
+} from "@/features/viewer/searchParam";
+import { useViewerNavigation } from "@/features/viewer/useViewerNavigation";
 
 // A closed set of four values with a default (D9, rating-gallery spec):
 // `.catch` is what turns an unrecognized filter into "all" instead of a
 // validation error, so an old or hand-edited link never breaks.
+//
+// The open photo joins it as a second param on this same route (D1, D2):
+// a param rather than a child route, so the grid below stays mounted and
+// closing is just this address without it.
 const gallerySearchSchema = z.object({
 	filter: z.enum(GALLERY_FILTERS).catch("all"),
+	...viewerSearchSchema,
 });
 
 export const Route = createFileRoute("/_app/albums/$albumId/")({
@@ -52,8 +63,9 @@ const EMPTY_MESSAGE: Record<GalleryFilter, string> = {
 
 function AlbumGallery() {
 	const { albumId } = Route.useParams();
-	const { filter } = Route.useSearch();
+	const { filter, [VIEWER_SEARCH_PARAM]: openPhotoId } = Route.useSearch();
 	const navigate = useNavigate();
+	const { openPhoto, showPhoto, closeViewer } = useViewerNavigation();
 	// Already loaded by the layout's own loader (D11): reading it here
 	// again is a cache hit, never a second request.
 	const { data: album } = useSuspenseQuery(albumQueryOptions(albumId));
@@ -139,6 +151,7 @@ function AlbumGallery() {
 							onSetRating={(approved) =>
 								setRating.mutate({ photoId: photo.id, approved })
 							}
+							onOpen={() => openPhoto(photo.id)}
 							onDelete={
 								album.isOwner ? () => setPhotoPendingDelete(photo) : undefined
 							}
@@ -181,6 +194,18 @@ function AlbumGallery() {
 				photo={photoPendingDelete}
 				onOpenChange={(open) => !open && setPhotoPendingDelete(null)}
 			/>
+
+			{/* The set it moves through is this screen's own filtered list,
+			in the order it is being shown (D3): the viewer never learns
+			what a filter is, it just walks what it was handed. */}
+			{openPhotoId && (
+				<PhotoViewer
+					photos={gallery.photos}
+					openPhotoId={openPhotoId}
+					onOpenPhoto={showPhoto}
+					onClose={closeViewer}
+				/>
+			)}
 		</div>
 	);
 }

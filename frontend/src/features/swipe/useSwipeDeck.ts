@@ -41,6 +41,9 @@ export function useSwipeDeck(albumId: string, initialPhotos: PendingPhoto[]) {
 	);
 
 	return {
+		// What is left of the sequence, in its own order: the set the
+		// viewer moves through when a photo is opened from the card (D3).
+		remaining,
 		current: remaining[0] ?? null,
 		next: remaining[1] ?? null,
 		finished: remaining.length === 0,

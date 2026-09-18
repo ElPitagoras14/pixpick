@@ -6,14 +6,29 @@ import { Button } from "@/components/ui/button";
 import type { PendingPhoto } from "@/features/swipe/api";
 import { SwipeCard, type SwipeCardHandle } from "@/features/swipe/SwipeCard";
 import { useSwipeDeck } from "@/features/swipe/useSwipeDeck";
+import { PhotoViewer } from "@/features/viewer/PhotoViewer";
 
 interface SwipeDeckProps {
 	albumId: string;
 	initialPhotos: PendingPhoto[];
+	/** Which photo the viewer has open, straight off the address (D1) --
+	 * absent means it is closed. */
+	openPhotoId?: string;
+	onOpenPhoto: (photoId: string) => void;
+	onShowPhoto: (photoId: string) => void;
+	onCloseViewer: () => void;
 }
 
-export function SwipeDeck({ albumId, initialPhotos }: SwipeDeckProps) {
+export function SwipeDeck({
+	albumId,
+	initialPhotos,
+	openPhotoId,
+	onOpenPhoto,
+	onShowPhoto,
+	onCloseViewer,
+}: SwipeDeckProps) {
 	const {
+		remaining,
 		current,
 		next,
 		finished,
@@ -23,19 +38,24 @@ export function SwipeDeck({ albumId, initialPhotos }: SwipeDeckProps) {
 		retryFailure,
 	} = useSwipeDeck(albumId, initialPhotos);
 	const activeCardRef = useRef<SwipeCardHandle>(null);
+	const viewerOpen = openPhotoId !== undefined;
 
 	// The keyboard is a full path, not an afterthought (photo-rating spec):
 	// a whole sequence has to be completable without ever touching the
 	// gesture or the pointer.
+	//
+	// Silent while the viewer is open: there the arrows step between
+	// photos, and a key that both moved the viewer and rated the photo
+	// underneath would rate one nobody decided on (photo-viewer spec).
 	useEffect(() => {
-		if (finished) return;
+		if (finished || viewerOpen) return;
 		function onKeyDown(event: KeyboardEvent) {
 			if (event.key === "ArrowRight") activeCardRef.current?.exit(1);
 			if (event.key === "ArrowLeft") activeCardRef.current?.exit(-1);
 		}
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [finished]);
+	}, [finished, viewerOpen]);
 
 	if (finished) {
 		return (
@@ -66,6 +86,7 @@ export function SwipeDeck({ albumId, initialPhotos }: SwipeDeckProps) {
 						photo={next}
 						active={false}
 						onDecide={() => {}}
+						onOpen={() => {}}
 					/>
 				)}
 				{current && (
@@ -75,6 +96,7 @@ export function SwipeDeck({ albumId, initialPhotos }: SwipeDeckProps) {
 						photo={current}
 						active
 						onDecide={decide}
+						onOpen={() => onOpenPhoto(current.id)}
 					/>
 				)}
 			</div>
@@ -126,6 +148,18 @@ export function SwipeDeck({ albumId, initialPhotos }: SwipeDeckProps) {
 						</div>
 					))}
 				</div>
+			)}
+
+			{/* The set it moves through is what is left of the sequence, in
+			its own order (D3). Closing leaves the deck exactly as it was:
+			nothing here was unmounted, and no decision was emitted. */}
+			{openPhotoId && (
+				<PhotoViewer
+					photos={remaining}
+					openPhotoId={openPhotoId}
+					onOpenPhoto={onShowPhoto}
+					onClose={onCloseViewer}
+				/>
 			)}
 		</div>
 	);

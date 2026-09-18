@@ -8,6 +8,9 @@ export interface PendingPhoto {
 	width: number | null;
 	height: number | null;
 	ratingUrl: string;
+	// What the viewer shows when this photo is opened from the card
+	// (photo-viewer spec) -- the card itself keeps drawing `ratingUrl`.
+	viewerUrl: string;
 }
 
 async function fetchPending(albumId: string): Promise<PendingPhoto[]> {

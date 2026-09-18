@@ -1,5 +1,8 @@
+from src.images.factory import image_port
+from src.images.port import Variant
 from src.packages.photos import repository as photos_repository
 from src.packages.ratings import repository as ratings_repository
+from src.storage.port import object_key
 from tests.authhelpers import log_in
 from tests.factories import (
     create_album,
@@ -164,7 +167,15 @@ async def test_the_gallery_does_not_expose_aggregated_counts(client, connection)
     response = client.get(f"/api/albums/{album.id}/photos/gallery")
 
     entry = response.json()["data"]["photos"][0]
-    assert set(entry.keys()) == {"id", "position", "width", "height", "thumbnailUrl", "rating"}
+    assert set(entry.keys()) == {
+        "id",
+        "position",
+        "width",
+        "height",
+        "thumbnailUrl",
+        "viewerUrl",
+        "rating",
+    }
 
 
 async def test_an_unknown_filter_is_rejected_rather_than_silently_defaulted(client, connection):
@@ -177,3 +188,39 @@ async def test_an_unknown_filter_is_rejected_rather_than_silently_defaulted(clie
     response = client.get(f"/api/albums/{album.id}/photos/gallery", params={"filter": "bogus"})
 
     assert response.status_code == 422
+
+
+async def test_the_gallery_carries_the_viewer_variant_alongside_the_thumbnail(client, connection):
+    """Task 1.1, 1.3 (photo-viewer spec): the grid keeps the thumbnail it
+    already had -- the largest variant is added next to it, never in its
+    place -- and neither address is the original."""
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+    photo = await create_photo(connection, album_id=album.id, position=1)
+
+    response = client.get(f"/api/albums/{album.id}/photos/gallery")
+
+    entry = response.json()["data"]["photos"][0]
+    key = object_key(album_id=str(album.id), photo_id=str(photo.id))
+    assert entry["thumbnailUrl"] == image_port.variant_url(
+        object_key=key, variant=Variant.THUMBNAIL
+    )
+    assert entry["viewerUrl"] == image_port.variant_url(object_key=key, variant=Variant.VIEWER)
+    assert entry["viewerUrl"] != entry["thumbnailUrl"]
+
+
+async def test_the_rating_sequence_carries_the_viewer_variant_too(client, connection):
+    """The viewer opens from the rating card as well, and what it shows
+    is the same largest variant wherever it was opened from (photo-viewer
+    spec) -- so the card's own `rating` variant stays untouched and the
+    viewer's is carried next to it."""
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+    photo = await create_photo(connection, album_id=album.id, position=1)
+
+    response = client.get(f"/api/albums/{album.id}/pending")
+
+    entry = response.json()["data"][0]
+    key = object_key(album_id=str(album.id), photo_id=str(photo.id))
+    assert entry["ratingUrl"] == image_port.variant_url(object_key=key, variant=Variant.RATING)
+    assert entry["viewerUrl"] == image_port.variant_url(object_key=key, variant=Variant.VIEWER)
