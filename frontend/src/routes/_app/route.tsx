@@ -48,6 +48,17 @@ function AppLayout() {
 		<div className="flex min-h-dvh flex-col">
 			<header className="flex items-center justify-between gap-4 border-b p-4">
 				<nav className="flex items-center gap-4">
+					{/* The way back in from anywhere (app-entry spec): one more
+					link beside the one already here, with the same active
+					treatment -- two links don't make a navigation component
+					(D5). */}
+					<Link
+						to="/home"
+						className="text-sm font-semibold"
+						activeProps={{ className: "underline" }}
+					>
+						Home
+					</Link>
 					<Link
 						to="/albums"
 						search={{ group: "own" }}
