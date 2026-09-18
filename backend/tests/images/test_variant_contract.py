@@ -10,7 +10,9 @@ Requires the local environment already running with at least
 
 import base64
 import os
+import struct
 import uuid
+import zlib
 from collections.abc import Iterator
 
 import boto3
@@ -18,6 +20,7 @@ import httpx
 import pytest
 from botocore.client import Config
 
+from src.images.catalog import CATALOG
 from src.images.factory import image_port
 from src.images.port import Variant
 from src.storage.config import storage_settings
@@ -110,3 +113,93 @@ def test_a_missing_object_fails_as_an_error_not_as_the_app_document():
 
     assert response.status_code >= 400
     assert "text/html" not in response.headers.get("content-type", "")
+
+
+def _solid_png(width: int, height: int) -> bytes:
+    """A PNG of the given size, built here rather than embedded: the
+    viewer variant's ceiling is 2048px, so checking that the longest side
+    comes back at that ceiling needs an original bigger than it, and that
+    is far too many bytes to paste into a test file."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    # One filter byte per scanline, then RGB triples -- uniform, so zlib
+    # takes the whole thing down to a few kilobytes.
+    raw = b"".join(b"\x00" + b"\xc0\x40\x20" * width for _ in range(height))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(raw, 6))
+        + chunk(b"IEND", b"")
+    )
+
+
+def _webp_size(data: bytes) -> tuple[int, int]:
+    """The canvas size of a lossy (VP8) or extended (VP8X) WebP, read off
+    its own header -- the project has no image library, and this is the
+    only thing these tests need to know about the bytes that came back."""
+    assert data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    kind = data[12:16]
+    if kind == b"VP8X":
+        width = int.from_bytes(data[24:27], "little") + 1
+        height = int.from_bytes(data[27:30], "little") + 1
+        return width, height
+    if kind == b"VP8 ":
+        assert data[23:26] == b"\x9d\x01\x2a"
+        width = int.from_bytes(data[26:28], "little") & 0x3FFF
+        height = int.from_bytes(data[28:30], "little") & 0x3FFF
+        return width, height
+    raise AssertionError(f"unsupported WebP chunk {kind!r}")
+
+
+@pytest.fixture
+def uploaded_wide_object() -> Iterator[str]:
+    """A real original wider than the viewer variant's own ceiling, so
+    the variant has something to actually shrink."""
+    key = f"albums/contract-test/{uuid.uuid4()}"
+    client = _direct_client()
+    client.put_object(
+        Bucket=storage_settings.minio_bucket,
+        Key=key,
+        Body=_solid_png(3000, 1500),
+        ContentType="image/png",
+    )
+    yield key
+    client.delete_object(Bucket=storage_settings.minio_bucket, Key=key)
+
+
+def test_the_viewer_variant_arrives_at_its_ceiling_without_cropping(uploaded_wide_object):
+    """Task 1.2 (photo-viewer spec): the address the gallery now carries
+    resolves through nginx to the largest variant -- longest side at the
+    catalog's own ceiling, and the original's proportion intact, which is
+    what says it was fitted and not cropped."""
+    spec = CATALOG[Variant.VIEWER]
+    url = image_port.variant_url(object_key=uploaded_wide_object, variant=Variant.VIEWER)
+
+    response = httpx.get(url, timeout=30)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/webp"
+    width, height = _webp_size(response.content)
+    assert max(width, height) == spec.width
+    # 3000x1500 is exactly 2:1, so a crop to the variant's square box
+    # would come back 2048x2048 instead.
+    assert width == pytest.approx(height * 2, abs=2)
+
+
+def test_the_viewer_variant_never_enlarges_a_smaller_original(uploaded_object):
+    """Task 1.2: the ceiling is a ceiling, not a target -- an original
+    below it comes back at its own size, not blown up to 2048."""
+    url = image_port.variant_url(object_key=uploaded_object, variant=Variant.VIEWER)
+
+    response = httpx.get(url, timeout=30)
+
+    assert response.status_code == 200
+    assert _webp_size(response.content) == (8, 8)

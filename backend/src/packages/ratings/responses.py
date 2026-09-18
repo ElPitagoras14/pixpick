@@ -13,6 +13,12 @@ class PendingPhotoResponse(ApiModel):
     dimensions, used only to reserve its space before it loads, and the
     `rating` variant -- never `thumbnail`, which is the grid's own size
     (image-delivery spec).
+
+    `viewer_url` is here for the same reason it is on the gallery's own
+    photo: the viewer opens from the rating card too, and what it shows
+    is the largest variant wherever it was opened from (photo-viewer
+    spec). The card itself keeps drawing `rating_url`; this one is
+    requested only once a photo is actually opened.
     """
 
     id: UUID
@@ -20,6 +26,7 @@ class PendingPhotoResponse(ApiModel):
     width: int | None = None
     height: int | None = None
     rating_url: str
+    viewer_url: str
 
     @classmethod
     def from_row(cls, row: PendingPhotoRow, *, album_id: UUID) -> "PendingPhotoResponse":
@@ -30,6 +37,7 @@ class PendingPhotoResponse(ApiModel):
             width=row.width,
             height=row.height,
             rating_url=image_port.variant_url(object_key=key, variant=Variant.RATING),
+            viewer_url=image_port.variant_url(object_key=key, variant=Variant.VIEWER),
         )
 
 
