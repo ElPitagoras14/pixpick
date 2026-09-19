@@ -32,7 +32,9 @@ SHALL ofrecer un acceso visible a la aplicación en cualquier estado de sesión,
 
 ### Requirement: La primera pantalla después de iniciar sesión responde qué hacer ahora
 
-La pantalla a la que se llega al iniciar sesión SHALL NOT estar vacía ni ser un mero aviso de que la sesión está activa. SHALL mostrar tres cosas: cuánto espacio se está ocupando contra el límite de la cuenta, qué álbumes tienen fotos esperando la calificación de quien mira, y por dónde crear un álbum.
+La pantalla a la que se llega al iniciar sesión SHALL NOT estar vacía ni ser un mero aviso de que la sesión está activa. SHALL mostrar cuatro cosas: cuánto espacio se está ocupando contra el límite de la cuenta, qué porcentaje está ocupado de la instancia, qué álbumes tienen fotos esperando la calificación de quien mira, y por dónde crear un álbum.
+
+Los dos consumos SHALL distinguirse entre sí a simple vista, sin deducir cuál es cuál a partir de los números. Presentados como si fueran lo mismo, una cuenta casi vacía dentro de una instancia casi llena se leería como una contradicción, y es exactamente la situación en la que saber cuál es cuál importa.
 
 Una cuenta sin álbumes y sin nada pendiente SHALL mostrar igualmente un estado que indique por dónde empezar. SHALL NOT quedar en blanco por no tener contenido: no tener nada todavía es el caso más importante de esta pantalla, no una excepción.
 
@@ -52,6 +54,12 @@ Una cuenta sin álbumes y sin nada pendiente SHALL mostrar igualmente un estado 
 
 - **WHEN** se abre esta pantalla
 - **THEN** muestra cuánto espacio se está ocupando y cuál es el límite
+
+#### Scenario: El espacio de la instancia se ve junto al propio
+
+- **WHEN** se abre esta pantalla
+- **THEN** muestra también qué porcentaje está ocupado de la instancia
+- **AND** se distingue de lo que ocupa la cuenta de quien mira
 
 #### Scenario: Nada pendiente se distingue de nada cargado
 

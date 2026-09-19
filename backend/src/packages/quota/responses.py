@@ -2,7 +2,30 @@ from uuid import UUID
 
 from src.models import ApiModel
 
-from .schemas import AccountUsage, AlbumUsage, AlbumUsageRow, PhotoUsageRow
+from .schemas import AccountUsage, AlbumUsage, AlbumUsageRow, InstanceUsage, PhotoUsageRow
+
+
+class InstanceUsageResponse(ApiModel):
+    """The instance's own resource (instance-quota spec, D3): the
+    percentage occupied, rounded, and nothing more. Never the total or
+    the limit in bytes -- that's the installation's real capacity, and
+    publishing it to any signed-in session describes whoever hosts it
+    for no benefit to whoever is asking, since the percentage already
+    says everything they can act on. Never a breakdown by account
+    either, since what any one account occupies is that account's own
+    (account-quota spec) and not this resource's to expose.
+    """
+
+    used_percent: int
+
+    @classmethod
+    def from_usage(cls, usage: InstanceUsage) -> "InstanceUsageResponse":
+        percent = (
+            0
+            if usage.limit_bytes <= 0
+            else min(round(usage.used_bytes / usage.limit_bytes * 100), 100)
+        )
+        return cls(used_percent=percent)
 
 
 class AlbumUsageEntryResponse(ApiModel):

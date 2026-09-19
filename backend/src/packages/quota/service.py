@@ -5,7 +5,19 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from src.packages.photos.config import photos_settings
 
 from . import repository
-from .schemas import AccountUsage, AlbumUsage
+from .schemas import AccountUsage, AlbumUsage, InstanceUsage
+
+
+async def get_instance_usage(connection: AsyncConnection) -> InstanceUsage:
+    """The instance level (instance-quota spec): the total over every
+    account, and the limit it is measured against -- read from the same
+    place granting reads it from, whether it is being enforced or merely
+    reported (D3 in add-instance-quota).
+    """
+    return InstanceUsage(
+        used_bytes=await repository.instance_used_bytes(connection),
+        limit_bytes=photos_settings.instance_max_bytes,
+    )
 
 
 async def get_account_usage(connection: AsyncConnection, *, owner_id: UUID) -> AccountUsage:

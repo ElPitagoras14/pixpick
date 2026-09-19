@@ -2,10 +2,18 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from src.database.client import fetch_all, fetch_val
+from src.database.client import fetch_all, fetch_val, write
 from src.packages.albums.repository import ACTIVE_CONDITION, retention_params
 
 from .schemas import AlbumUsageRow, PhotoUsageRow
+
+# A fixed key (D1 in add-instance-quota): the exact value carries no
+# meaning, only that it is always this same one, taken by every
+# concession and by nothing else. Postgres advisory locks share one
+# keyspace per database, so this constant colliding with another
+# feature's own lock would need that feature to pick this same number
+# on purpose.
+INSTANCE_LOCK_KEY = 727_100_002_017
 
 # What a photo contributes to its owner's usage (account-quota spec):
 # its real size once confirmed -- the one verified against the object
@@ -43,6 +51,39 @@ async def account_used_bytes(connection: AsyncConnection, *, owner_id: UUID) -> 
         {"owner_id": owner_id, **retention_params()},
     )
     return int(total)
+
+
+async def instance_used_bytes(connection: AsyncConnection) -> int:
+    """The whole instance's usage, over every account (D2 in
+    add-instance-quota): the same sum as `account_used_bytes`, without
+    its owner filter, reusing the very same conditions -- so the two
+    totals can never come to count different things by one of them
+    drifting out of step with the other.
+    """
+    total = await fetch_val(
+        connection,
+        f"""
+        select coalesce(sum({_COUNTED_BYTES}), 0)
+        from photos p
+        join albums a on a.id = p.album_id
+        where {_COUNTED} and {ACTIVE_CONDITION}
+        """,
+        retention_params(),
+    )
+    return int(total)
+
+
+async def acquire_instance_lock(connection: AsyncConnection) -> None:
+    """Serializes the rest of this transaction against every other
+    concession in the instance (D1 in add-instance-quota): a
+    transaction-scoped advisory lock on a fixed key, released
+    automatically at commit or rollback, with nothing to remember to
+    release. Takes the place of the lock granting used to take on the
+    owner's own row: serializing globally already serializes by person,
+    and a single mutex for all three limits leaves no pair of locks
+    that two transactions could ever take in opposite orders.
+    """
+    await write(connection, "select pg_advisory_xact_lock(:key)", {"key": INSTANCE_LOCK_KEY})
 
 
 async def account_usage_by_album(

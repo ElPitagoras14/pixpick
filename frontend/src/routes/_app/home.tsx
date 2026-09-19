@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { type AlbumSummary, albumsQueryOptions } from "@/features/albums/api";
-import { accountUsageQueryOptions } from "@/features/quota/api";
+import {
+	accountUsageQueryOptions,
+	instanceUsageQueryOptions,
+} from "@/features/quota/api";
 import { StorageMeter } from "@/features/quota/StorageMeter";
 
 // Where signing in lands (identity-provider spec's DEFAULT_RETURN_TO), so
@@ -26,12 +29,35 @@ function Home() {
 	// (D2), the same way the album view asks for its owner stats: if this
 	// one fails or is still in flight, everything below still renders --
 	// not seeing the meter can't stand between anyone and what they have
-	// left to rate.
+	// left to rate. The instance's own usage travels the same way and for
+	// the same reason (task 4.2 in add-instance-quota).
 	const { data: usage } = useQuery(accountUsageQueryOptions());
+	const { data: instanceUsage } = useQuery(instanceUsageQueryOptions());
 
 	return (
 		<div className="mx-auto flex max-w-3xl flex-col gap-8 p-6">
-			{usage && <StorageMeter usage={usage} />}
+			{(usage || instanceUsage) && (
+				<div className="flex flex-col gap-4 sm:flex-row sm:gap-8">
+					{usage && (
+						<div className="flex-1">
+							<StorageMeter usage={usage} />
+						</div>
+					)}
+					{instanceUsage && (
+						<div className="flex-1">
+							{/* A different label and a different full-space
+							message (D5, app-entry spec's "se distingue cuál es
+							cuál"): this one isn't the viewer's own space, so it
+							never tells them to delete anything of theirs. */}
+							<StorageMeter
+								usage={instanceUsage}
+								label="Instance storage"
+								fullMessage="The instance is full. This isn't your storage — space frees up once someone deletes photos."
+							/>
+						</div>
+					)}
+				</div>
+			)}
 
 			<section className="flex flex-col gap-3">
 				<div className="flex flex-wrap items-center justify-between gap-3">

@@ -54,28 +54,35 @@ def _validate_files(files: list[GrantFileInput]) -> None:
 async def grant_batch(
     connection: AsyncConnection, *, album_id: UUID, owner_id: UUID, files: list[GrantFileInput]
 ) -> GrantBatchResult:
-    """Grants what fits and explains what does not (D4, D5). Two
-    independent capacity limits are evaluated per file -- the album's
-    maximum number of photos and the owner's storage -- and a file is
-    granted only if it fits in both.
+    """Grants what fits and explains what does not (D4, D5, and D4 in
+    add-instance-quota). Three independent capacity limits are evaluated
+    per file -- the album's maximum number of photos, the owner's
+    storage and the instance's -- and a file is granted only if it fits
+    in all three.
 
     Neither one rejects the whole batch: running out of capacity is a
-    fact about the account's state, not a mistake in what was asked, so
-    what fits is granted and what does not comes back named and
-    explained. An inadmissible *file*, checked above, still rejects the
-    batch whole -- the client knows its own files' type and size before
-    asking, so that one really is an inconsistency.
+    fact about the account's or the instance's state, not a mistake in
+    what was asked, so what fits is granted and what does not comes back
+    named and explained. An inadmissible *file*, checked above, still
+    rejects the batch whole -- the client knows its own files' type and
+    size before asking, so that one really is an inconsistency.
     """
     _validate_files(files)
 
-    # Locks the *person* for the rest of this transaction (D1), where
-    # granting used to lock the album: the account's limit spans every
-    # album its owner has, so two batches in two of their albums have to
-    # serialize against each other, which a lock on one album cannot do.
-    # Every album has exactly one owner, so this still serializes the
-    # position and occupancy counting the album lock protected.
-    locked_owner = await auth_repository.lock_user_id(connection, user_id=owner_id)
-    if locked_owner is None:
+    # Serializes the rest of this transaction against every other
+    # concession in the instance (D1 in add-instance-quota), where
+    # granting used to lock the owner's own row: the instance's limit
+    # spans every account, so two batches of two different owners have
+    # to serialize against each other too, which a lock on one person's
+    # row cannot do. Serializing globally already serializes by person
+    # and by album, so this still protects the position and occupancy
+    # counting the narrower locks used to.
+    await quota_repository.acquire_instance_lock(connection)
+    # Without a lock (D1 in add-instance-quota): the exclusion above no
+    # longer travels attached to this check, so a session from an
+    # account deleted after it signed in still gets the same
+    # `NotFoundError` it always did.
+    if not await auth_repository.user_exists(connection, user_id=owner_id):
         raise NotFoundError()
 
     # Ownership as a query of its own, now that it no longer travels
@@ -88,8 +95,10 @@ async def grant_batch(
 
     occupied = await repository.count_occupied_slots(connection, album_id=album_id)
     used_bytes = await quota_repository.account_used_bytes(connection, owner_id=owner_id)
+    instance_used_bytes = await quota_repository.instance_used_bytes(connection)
     remaining_photos = max(photos_settings.album_max_photos - occupied, 0)
     remaining_bytes = max(photos_settings.account_max_bytes - used_bytes, 0)
+    remaining_instance_bytes = max(photos_settings.instance_max_bytes - instance_used_bytes, 0)
 
     base_position = await repository.next_position(connection, album_id=album_id)
     expires_at = datetime.now(UTC) + UPLOAD_GRANT_TTL
@@ -100,8 +109,8 @@ async def grant_batch(
     for index, file in enumerate(files):
         # The album is checked first: once it is full it is full for
         # every file left, so its own reason is the one that stands even
-        # when the account has no space either (D5 -- for this limit
-        # there is nothing to skip ahead to).
+        # when the account or the instance has no space either (D5 --
+        # for this limit there is nothing to skip ahead to).
         if remaining_photos <= 0:
             denied.append(DeniedFile(index=index, reason="album_full", remaining_photos=0))
             continue
@@ -112,6 +121,18 @@ async def grant_batch(
             # other than the order they were picked in.
             denied.append(
                 DeniedFile(index=index, reason="account_full", remaining_bytes=remaining_bytes)
+            )
+            continue
+        if file.size > remaining_instance_bytes:
+            # Checked after the account (D4 in add-instance-quota): the
+            # order alone implements the precedence the spec requires --
+            # when both are full, the account's reason is the one that
+            # comes back, because it's the one whoever is asking can act
+            # on.
+            denied.append(
+                DeniedFile(
+                    index=index, reason="instance_full", remaining_bytes=remaining_instance_bytes
+                )
             )
             continue
 
@@ -136,12 +157,13 @@ async def grant_batch(
             }
         )
         granted.append(GrantedFile(index=index, photo_id=photo_id, position=position, grant=grant))
-        # Both limits are charged as the walk goes (photo-upload spec):
-        # a file waiting to be confirmed occupies its slot and its
+        # All three limits are charged as the walk goes (photo-upload
+        # spec): a file waiting to be confirmed occupies its slot and its
         # declared size from the moment its grant is issued, so a batch
-        # cannot outgrow either limit against itself.
+        # cannot outgrow any of them against itself.
         remaining_photos -= 1
         remaining_bytes -= file.size
+        remaining_instance_bytes -= file.size
 
     if rows:
         await repository.insert_pending_photos(connection, rows)

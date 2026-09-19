@@ -34,11 +34,13 @@ export interface PhotoGrant {
 	uploadHeaders: Record<string, string>;
 }
 
-// Which of the two capacity limits stopped a file (photo-upload spec).
-// They are not resolved the same way: an album that's full is resolved
-// by creating another album, an account without space by deleting
-// something -- so they are never collapsed into one message.
-export type DenialReason = "album_full" | "account_full";
+// Which of the three capacity limits stopped a file (photo-upload spec,
+// modified by add-instance-quota). Not resolved the same way: an album
+// that's full is resolved by creating another album, an account without
+// space by deleting something, and an instance without space is not
+// resolved by whoever is asking at all -- so they are never collapsed
+// into one message.
+export type DenialReason = "album_full" | "account_full" | "instance_full";
 
 export interface PhotoDenial {
 	index: number;

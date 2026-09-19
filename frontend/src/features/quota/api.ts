@@ -13,6 +13,14 @@ export interface AccountUsage {
 	albums: AlbumUsageEntry[];
 }
 
+/** The instance's own resource (instance-quota spec, D3): only the
+ * percentage occupied, rounded -- never the raw total or limit, which
+ * describe the installation's real capacity and aren't this resource's
+ * to publish to every signed-in session. */
+export interface InstanceUsage {
+	usedPercent: number;
+}
+
 export interface PhotoUsageEntry {
 	photoId: string;
 	sizeBytes: number;
@@ -29,9 +37,16 @@ const EMPTY_ACCOUNT_USAGE: AccountUsage = {
 	albums: [],
 };
 
+const EMPTY_INSTANCE_USAGE: InstanceUsage = { usedPercent: 0 };
+
 async function fetchAccountUsage(): Promise<AccountUsage> {
 	const response = await api.get<ApiEnvelope<AccountUsage>>("/account/usage");
 	return response.data.data ?? EMPTY_ACCOUNT_USAGE;
+}
+
+async function fetchInstanceUsage(): Promise<InstanceUsage> {
+	const response = await api.get<ApiEnvelope<InstanceUsage>>("/instance/usage");
+	return response.data.data ?? EMPTY_INSTANCE_USAGE;
 }
 
 async function fetchAlbumUsage(albumId: string): Promise<AlbumUsage> {
@@ -49,6 +64,17 @@ export function accountUsageQueryOptions() {
 	return queryOptions({
 		queryKey: ["account", "usage"] as const,
 		queryFn: fetchAccountUsage,
+	});
+}
+
+// No account or album ever invalidates this one on its own (D3 in
+// add-instance-quota): what any of them occupies is a slice of the same
+// total, but the total belongs to nobody in particular, so it's read
+// fresh rather than kept in step with every place that changes it.
+export function instanceUsageQueryOptions() {
+	return queryOptions({
+		queryKey: ["instance", "usage"] as const,
+		queryFn: fetchInstanceUsage,
 	});
 }
 

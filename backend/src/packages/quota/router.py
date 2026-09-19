@@ -9,7 +9,12 @@ from src.packages.auth.schemas import UserRecord
 from src.responses import Envelope
 
 from . import service
-from .responses import AccountUsageResponse, AlbumUsageResponse
+from .responses import AccountUsageResponse, AlbumUsageResponse, InstanceUsageResponse
+
+# The instance's own consumption (instance-quota spec, D3): a resource of
+# its own and not a field on the account's, because it belongs to no one
+# in particular -- any signed-in person reads the same answer.
+instance_router = APIRouter(prefix="/instance")
 
 # The account's own consumption, at a path that names no person
 # (account-quota spec): the answer is always about whoever is signed in,
@@ -19,6 +24,18 @@ account_router = APIRouter(prefix="/account")
 # The album level, under the album it is about -- the same shape
 # `album-stats` already uses for the other owner-only resource of an album.
 album_router = APIRouter(prefix="/albums/{album_id}")
+
+
+@instance_router.get("/usage")
+async def get_instance_usage(
+    # Any signed-in person, and nothing more (instance-quota spec): no
+    # ownership to check, since the instance's space belongs to no one
+    # account.
+    _user: UserRecord = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> Envelope[InstanceUsageResponse]:
+    usage = await service.get_instance_usage(connection)
+    return Envelope(data=InstanceUsageResponse.from_usage(usage))
 
 
 @account_router.get("/usage")
