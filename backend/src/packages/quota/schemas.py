@@ -25,6 +25,19 @@ class PhotoUsageRow(BaseModel):
     size_bytes: int
 
 
+class InstanceUsage(BaseModel):
+    """The instance level (instance-quota spec): the total over every
+    account and the limit it is measured against, with no breakdown --
+    the instance isn't anyone's, so there is nothing to attribute it to.
+    Internal only: `responses.InstanceUsageResponse` reduces these two
+    numbers to a percentage before anything crosses the API boundary
+    (D3), so this shape never reaches a client as-is.
+    """
+
+    used_bytes: int
+    limit_bytes: int
+
+
 class AccountUsage(BaseModel):
     """The account level of the three the spec defines: the total, the
     limit it is measured against, and the per-album breakdown. The three

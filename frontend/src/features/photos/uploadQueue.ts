@@ -75,12 +75,18 @@ function validateFile(file: File): string | null {
 }
 
 /** Why one file didn't get a grant, in the words the person can act on
- * (D4): the two limits are never collapsed into one message, because an
- * album that's full is fixed by creating another album and an account
- * without space is not. */
+ * (D4, modified by add-instance-quota): the three limits are never
+ * collapsed into one message, because an album that's full is fixed by
+ * creating another album, an account without space by deleting
+ * something -- and an instance without space isn't fixed by whoever is
+ * asking at all, so this SHALL NOT tell them to delete their own photos
+ * (upload-feedback spec). */
 function denialMessage(denial: PhotoDenial): string {
 	if (denial.reason === "album_full") {
 		return "Album full";
+	}
+	if (denial.reason === "instance_full") {
+		return "The instance is full — this isn't your space to free. Try again once someone else deletes photos.";
 	}
 	return `No space (${formatBytes(denial.remainingBytes ?? 0)} left)`;
 }

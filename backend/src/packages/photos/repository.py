@@ -55,11 +55,13 @@ async def next_position(connection: AsyncConnection, *, album_id: UUID) -> int:
 
 
 async def insert_pending_photos(connection: AsyncConnection, rows: list[dict]) -> None:
-    """One batch write for the whole grant (D12): together with the lock
-    `auth.repository.lock_user_id` takes first, this is what keeps two
-    batches granted at once for the same person from claiming the same
-    position or, combined with the occupancy count and the account's
-    usage, from slipping past either limit together.
+    """One batch write for the whole grant (D12): together with the
+    instance-wide advisory lock granting takes first (D1 in
+    add-instance-quota, `quota.repository.acquire_instance_lock`), this
+    is what keeps two batches granted at once -- for the same person or
+    for two different ones -- from claiming the same position or, combined
+    with the occupancy count and the account's and instance's usage, from
+    slipping past any of the three limits together.
     """
     await write_many(
         connection,

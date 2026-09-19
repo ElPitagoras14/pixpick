@@ -3,6 +3,83 @@ from tests.authhelpers import log_in
 from tests.factories import create_album, create_membership, create_photo, create_user
 
 
+async def test_the_instance_resource_answers_with_only_the_percentage(
+    client, connection, monkeypatch
+):
+    monkeypatch.setattr("src.packages.quota.service.photos_settings.instance_max_bytes", 10_000)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+    await create_photo(connection, album_id=album.id, declared_size=1_500, size=1_500)
+
+    response = client.get("/api/instance/usage")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {"usedPercent": 15}
+
+
+async def test_the_instance_resource_never_reveals_the_raw_total_or_limit(
+    client, connection, monkeypatch
+):
+    """D3 (revisado a pedido del usuario): la capacidad real de la
+    instancia no cruza la respuesta, solo el porcentaje que resulta de
+    ella."""
+    monkeypatch.setattr("src.packages.quota.service.photos_settings.instance_max_bytes", 10_000)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+    await create_photo(connection, album_id=album.id, declared_size=1_500, size=1_500)
+
+    response = client.get("/api/instance/usage")
+
+    data = response.json()["data"]
+    assert "usedBytes" not in data
+    assert "limitBytes" not in data
+
+
+async def test_the_instance_percentage_caps_at_100(client, connection, monkeypatch):
+    monkeypatch.setattr("src.packages.quota.service.photos_settings.instance_max_bytes", 1_000)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+    await create_photo(connection, album_id=album.id, declared_size=5_000, size=5_000)
+
+    response = client.get("/api/instance/usage")
+
+    assert response.json()["data"]["usedPercent"] == 100
+
+
+async def test_the_instance_resource_does_not_require_owning_anything(
+    client, connection, monkeypatch
+):
+    """Any signed-in person, without needing an album of their own
+    (instance-quota spec): the instance's space belongs to no one."""
+    monkeypatch.setattr("src.packages.quota.service.photos_settings.instance_max_bytes", 8_000)
+    stranger = await create_user(connection)
+    foreign_album = await create_album(connection, owner_id=stranger.id)
+    await create_photo(connection, album_id=foreign_album.id, declared_size=4_000, size=4_000)
+    await log_in(client, connection)
+
+    response = client.get("/api/instance/usage")
+
+    assert response.status_code == 200
+    # The stranger's photos still count towards the percentage: it
+    # isn't scoped to the caller the way the account resource is.
+    assert response.json()["data"]["usedPercent"] > 0
+
+
+async def test_the_instance_resource_reveals_no_single_accounts_usage(client, connection):
+    stranger = await create_user(connection)
+    foreign_album = await create_album(connection, owner_id=stranger.id)
+    await create_photo(connection, album_id=foreign_album.id, declared_size=4_000)
+    await log_in(client, connection)
+
+    response = client.get("/api/instance/usage")
+
+    assert set(response.json()["data"].keys()) == {"usedPercent"}
+
+
+async def test_the_instance_resource_requires_a_session(client):
+    assert client.get("/api/instance/usage").status_code == 401
+
+
 async def test_the_account_resource_answers_with_the_total_the_limit_and_the_breakdown(
     client, connection, monkeypatch
 ):

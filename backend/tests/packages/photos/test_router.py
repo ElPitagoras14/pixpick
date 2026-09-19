@@ -3,11 +3,14 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
+from src.packages.albums import service as albums_service
 from src.packages.albums.config import albums_settings
 from src.packages.photos import repository
 from src.packages.photos import service as photos_service
 from src.packages.photos.schemas import GrantFileInput
 from src.packages.photos.warmup import warm_up_variants
+from src.packages.ratings import service as ratings_service
+from src.packages.shares import service as shares_service
 from tests.authhelpers import log_in
 from tests.factories import (
     create_album,
@@ -590,6 +593,67 @@ async def test_an_album_with_room_still_denies_when_the_account_is_full_elsewher
     assert data["denied"][0]["remainingBytes"] == 0
 
 
+async def test_a_file_that_does_not_fit_the_instance_is_skipped_and_a_smaller_one_fits(
+    client, connection, fake_storage, monkeypatch
+):
+    """D4 in add-instance-quota: the instance is the third check, after
+    the account's, and a smaller file further down the batch can still
+    fit in what the instance has left even after a bigger one didn't."""
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 1_500)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(
+        f"/api/albums/{album.id}/photos/grants",
+        json={"files": [{**_ONE_FILE, "size": 1_400}, {**_ONE_FILE, "size": 100}]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert [item["index"] for item in data["granted"]] == [0, 1]
+    assert data["denied"] == []
+
+    second = client.post(
+        f"/api/albums/{album.id}/photos/grants",
+        json={"files": [{**_ONE_FILE, "size": 100}]},
+    )
+    assert second.status_code == 200
+    assert second.json()["data"]["granted"] == []
+    assert second.json()["data"]["denied"][0]["reason"] == "instance_full"
+
+
+async def test_the_instance_full_denies_even_with_room_in_the_account(
+    client, connection, fake_storage, monkeypatch
+):
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 500)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["denied"] == [
+        {"index": 0, "reason": "instance_full", "remainingPhotos": None, "remainingBytes": 500}
+    ]
+
+
+async def test_the_account_full_wins_over_the_instance_full(
+    client, connection, fake_storage, monkeypatch
+):
+    """When both are full at once the account's reason is the one that
+    comes back (photo-upload spec, modified by add-instance-quota): it's
+    the only one whoever is asking can act on."""
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 500)
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 500)
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["denied"][0]["reason"] == "account_full"
+
+
 async def test_an_album_of_someone_else_never_eats_into_this_persons_space(
     client, connection, fake_storage, monkeypatch
 ):
@@ -607,3 +671,164 @@ async def test_an_album_of_someone_else_never_eats_into_this_persons_space(
 
     assert response.status_code == 200
     assert len(response.json()["data"]["granted"]) == 1
+
+
+# --- Final verification (add-instance-quota, tasks 5.1-5.3) ---
+
+
+async def test_full_cycle_across_two_accounts_instance_full_then_freed(
+    committed_connection, fake_storage, monkeypatch
+):
+    """Task 5.1: fills the instance from one account, checks that a
+    second, unrelated one is denied with a reason that never points it
+    at its own photos, frees space from the first, and checks the second
+    can upload again -- the space freed anywhere is what re-enables
+    everyone (instance-quota spec)."""
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 1_000)
+    first_owner = await create_user(committed_connection)
+    second_owner = await create_user(committed_connection)
+    first_album = await create_album(committed_connection, owner_id=first_owner.id)
+    second_album = await create_album(committed_connection, owner_id=second_owner.id)
+    await committed_connection.commit()
+
+    files = [GrantFileInput(content_type="image/jpeg", size=1_000, width=None, height=None)]
+
+    first_result = await photos_service.grant_batch(
+        committed_connection, album_id=first_album.id, owner_id=first_owner.id, files=files
+    )
+    await committed_connection.commit()
+    assert len(first_result.granted) == 1
+
+    second_result = await photos_service.grant_batch(
+        committed_connection, album_id=second_album.id, owner_id=second_owner.id, files=files
+    )
+    await committed_connection.commit()
+    assert second_result.granted == []
+    # Not the account reason: the second account's own space has nothing
+    # to do with why this was denied.
+    assert second_result.denied[0].reason == "instance_full"
+
+    await photos_service.delete_photo(
+        album_id=first_album.id,
+        user_id=first_owner.id,
+        photo_id=first_result.granted[0].photo_id,
+    )
+
+    retried = await photos_service.grant_batch(
+        committed_connection, album_id=second_album.id, owner_id=second_owner.id, files=files
+    )
+    await committed_connection.commit()
+    assert len(retried.granted) == 1
+    assert retried.denied == []
+
+
+async def test_the_instance_being_full_does_not_block_anything_else(
+    committed_connection, fake_storage, monkeypatch
+):
+    """Task 5.2: with the instance already over its limit, every other
+    flow -- creating an account, viewing, rating, sharing and deleting --
+    keeps working exactly as it does with room to spare (instance-quota
+    spec).
+
+    Exercised at the service level, the same way
+    `test_freeing_space_re_enables_granting` above is: `delete_photo`
+    opens its own, separately committed transaction (D6 in
+    add-albums-and-upload), and mixing that with the HTTP `client` --
+    whose own connection never commits until the whole test tears down --
+    deadlocks the two fixtures' teardown against each other the moment
+    anything the client wrote is still locked when `delete_photo` needs
+    the same row.
+    """
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 10)
+    owner = await create_user(committed_connection)
+    album = await albums_service.create_album(
+        committed_connection, owner_id=owner.id, title="Full", description=None
+    )
+    rated_photo = await create_photo(
+        committed_connection, album_id=album.id, position=1, declared_size=500, size=500
+    )
+    deleted_photo = await create_photo(
+        committed_connection, album_id=album.id, position=2, declared_size=500, size=500
+    )
+    await committed_connection.commit()
+
+    assert await albums_service.list_albums(committed_connection, user_id=owner.id)
+    gallery = await photos_service.get_gallery(
+        committed_connection, album_id=album.id, user_id=owner.id, rating_filter="all"
+    )
+    assert len(gallery.photos) == 2
+
+    rating = await ratings_service.rate_photo(
+        committed_connection,
+        album_id=album.id,
+        photo_id=rated_photo.id,
+        user_id=owner.id,
+        approved=True,
+    )
+    assert rating.approved is True
+
+    link = await shares_service.get_or_create_link(committed_connection, album_id=album.id)
+    assert link
+    await committed_connection.commit()
+
+    await photos_service.delete_photo(
+        album_id=album.id, user_id=owner.id, photo_id=deleted_photo.id
+    )
+
+    # A brand-new account is created and uses the product with the
+    # instance still full: only incorporating new photos is ever
+    # conditioned on the instance's own space.
+    other_owner = await create_user(committed_connection)
+    other_album = await albums_service.create_album(
+        committed_connection, owner_id=other_owner.id, title="Fresh", description=None
+    )
+    await committed_connection.commit()
+    assert other_album.owner_id == other_owner.id
+
+
+async def test_reducing_the_account_limit_below_usage_keeps_photos_and_only_blocks_adding(
+    client, connection, fake_storage, monkeypatch
+):
+    """Task 5.3, account scope: the same guarantee `account-quota` already
+    established for this exact case -- lowering the limit below what an
+    account already occupies removes nothing and only blocks adding."""
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+    await create_photo(
+        connection, album_id=album.id, position=1, declared_size=200_000_000, size=200_000_000
+    )
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 500)
+
+    listing = client.get(f"/api/albums/{album.id}/photos")
+    assert listing.status_code == 200
+    assert len(listing.json()["data"]) == 1
+
+    grant_response = client.post(
+        f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]}
+    )
+    assert grant_response.status_code == 200
+    assert grant_response.json()["data"]["granted"] == []
+    assert grant_response.json()["data"]["denied"][0]["reason"] == "account_full"
+
+
+async def test_reducing_the_instance_limit_below_usage_keeps_photos_and_only_blocks_adding(
+    client, connection, fake_storage, monkeypatch
+):
+    """Task 5.3, instance scope: the same guarantee, one level up -- an
+    instance already over a lowered limit conserves every account's
+    photos and only rejects incorporating more."""
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+    await create_photo(connection, album_id=album.id, position=1, declared_size=2_000, size=2_000)
+    monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 500)
+
+    listing = client.get(f"/api/albums/{album.id}/photos")
+    assert listing.status_code == 200
+    assert len(listing.json()["data"]) == 1
+
+    grant_response = client.post(
+        f"/api/albums/{album.id}/photos/grants", json={"files": [_ONE_FILE]}
+    )
+    assert grant_response.status_code == 200
+    assert grant_response.json()["data"]["granted"] == []
+    assert grant_response.json()["data"]["denied"][0]["reason"] == "instance_full"

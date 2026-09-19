@@ -23,7 +23,19 @@ class PhotosSettings(BaseSettings):
     # In bytes rather than a friendlier unit: it's compared against a
     # file's own declared size, which arrives in bytes too, so any other
     # unit here would only move a conversion into the comparison.
-    account_max_bytes: int = 150 * 1024 * 1024  # 150 MiB
+    # 120 MiB (D6 in add-instance-quota): entering 51 times in the
+    # instance limit below is the point, so that no single account can
+    # get close to the shared ceiling on its own.
+    account_max_bytes: int = 120 * 1024 * 1024  # 120 MiB
+
+    # The third limit granting evaluates (instance-quota spec): the
+    # instance's own total, the sum of every account's usage and not
+    # derived from how many accounts exist (D6 in add-instance-quota).
+    # 6 GiB leaves a deliberate margin under R2's 10 GB free tier, sized
+    # to absorb objects the database stops counting -- an expired
+    # grant's upload, or an orphan left by a failed delete -- before the
+    # maintenance command that discards them ever runs.
+    instance_max_bytes: int = 6 * 1024 * 1024 * 1024  # 6 GiB
 
 
 photos_settings = PhotosSettings()  # type: ignore[call-arg]

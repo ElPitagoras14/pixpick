@@ -53,12 +53,14 @@ class GrantFileInput(BaseModel):
     height: int | None = None
 
 
-# Which of the two capacity limits kept a file from getting a grant
-# (photo-upload spec). They are not interchangeable and are not resolved
-# the same way: running out of room in the album is resolved by creating
-# another album, and running out of space in the account is resolved by
-# deleting something.
-DenialReason = Literal["album_full", "account_full"]
+# Which of the three capacity limits kept a file from getting a grant
+# (photo-upload spec, modified by add-instance-quota). Not interchangeable
+# and not resolved the same way: running out of room in the album is
+# resolved by creating another album, running out of space in the account
+# by deleting something, and running out of space in the instance is not
+# resolved by whoever is asking at all -- the space that's missing may not
+# be theirs.
+DenialReason = Literal["album_full", "account_full", "instance_full"]
 
 
 class GrantedFile(BaseModel):

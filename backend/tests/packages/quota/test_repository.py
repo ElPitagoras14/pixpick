@@ -74,6 +74,51 @@ async def test_the_breakdown_adds_up_to_the_total_and_each_album_to_its_photos(c
         assert sum(photo.size_bytes for photo in photos) == expected
 
 
+async def test_the_instance_total_includes_photos_of_two_different_owners(connection):
+    """D2 in add-instance-quota: the instance's total has no owner
+    filter, so it has to abarcar every account and not just one."""
+    first_owner = await create_user(connection)
+    second_owner = await create_user(connection)
+    first_album = await create_album(connection, owner_id=first_owner.id)
+    second_album = await create_album(connection, owner_id=second_owner.id)
+    await create_photo(connection, album_id=first_album.id, declared_size=1_000, size=1_000)
+    await create_photo(connection, album_id=second_album.id, declared_size=2_000, size=2_000)
+
+    assert await repository.instance_used_bytes(connection) == 3_000
+
+
+async def test_the_instance_total_and_the_account_total_never_count_different_things(
+    connection, monkeypatch
+):
+    """The two sums SHALL differ only in scope (instance-quota spec): the
+    same one owner's photos, in every situation the two totals could
+    disagree on -- available, pending with a live grant, pending with an
+    expired one, and one in an album retention already dropped -- have
+    to add up the same way for both.
+    """
+    monkeypatch.setattr(albums_settings, "album_retention_days", 30)
+    owner = await create_user(connection)
+    active = await create_album(connection, owner_id=owner.id)
+    expired = await create_album(
+        connection, owner_id=owner.id, renewed_at=datetime.now(UTC) - timedelta(days=31)
+    )
+    await create_photo(connection, album_id=active.id, declared_size=1_000, size=1_000)
+    await create_photo(connection, album_id=active.id, available=False, declared_size=200)
+    await create_photo(
+        connection,
+        album_id=active.id,
+        available=False,
+        declared_size=9_999,
+        upload_expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    await create_photo(connection, album_id=expired.id, declared_size=5_000, size=5_000)
+
+    account_total = await repository.account_used_bytes(connection, owner_id=owner.id)
+    instance_total = await repository.instance_used_bytes(connection)
+
+    assert account_total == instance_total == 1_200
+
+
 async def test_an_expired_album_stops_counting_against_the_account(connection, monkeypatch):
     """D5 in album-retention's design: the account's usage is a read of
     `albums` like any other, so it composes the same retention
