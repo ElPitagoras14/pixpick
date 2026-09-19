@@ -15,6 +15,22 @@ body,
 #app {
   min-height: 100%;
   width: 100%;
+}
+
+/* Only `html`, not `body`/`#app` too (not decorative): the CSS overflow
+   shorthand rule promotes the *other* axis to `auto` whenever one axis is
+   non-`visible` and the other is `visible` -- true whether that `visible`
+   is implicit or written out, so pairing this with an explicit
+   `overflow-y: visible` on the same element doesn't avoid it either. On a
+   nested element (`#app`) that promotion turns it into its own eligible
+   scroll container -- even though its height always matches its content,
+   so it never actually scrolls -- and any `position: sticky` inside it
+   anchors to that inert container instead of the real (viewport-driven)
+   one, freezing in place instead of sticking. `html` is exempt: the spec
+   has the UA apply the root element's own `overflow` to the viewport
+   itself rather than to a nested box, so the same promotion there is just
+   normal viewport scrolling, not a second scroll container. */
+html {
   overflow-x: hidden;
 }
 
@@ -63,6 +79,30 @@ body {
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-swipe-mock: swipe-mock 2.8s ease-in-out infinite;
+}
+
+/* Decorative loop for the landing hero's swipe mock (SwipeMock.tsx):
+   slides out to one side, reappears on the other, slides back to rest. */
+@keyframes swipe-mock {
+  0%,
+  15% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(120%) rotate(14deg);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(-120%) rotate(-14deg);
+    opacity: 0;
+  }
+  80%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
 }
 
 :root {

@@ -1,6 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
-import { Button } from "@/components/ui/button";
+import { Cta } from "@/features/landing/Cta";
+import { Features } from "@/features/landing/Features";
+import { Hero } from "@/features/landing/Hero";
+import { HowItWorks } from "@/features/landing/HowItWorks";
+import { Navbar } from "@/features/landing/Navbar";
 
 export const Route = createFileRoute("/")({ component: Landing });
 
@@ -14,23 +18,12 @@ function Landing() {
 	const { session } = Route.useRouteContext();
 
 	return (
-		<div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-6 text-center">
-			<h1 className="text-3xl font-bold">pixpick</h1>
-			<p className="text-muted-foreground max-w-sm text-sm">
-				Share a photo album with the people who were there, and let everyone
-				swipe through it to pick the shots worth keeping.
-			</p>
-			{/* One access, two cases (app-entry spec): signed in it goes
-			straight inside, signed out it goes to log in -- never absent. */}
-			<Button asChild size="lg" className="min-h-11 min-w-40">
-				{session ? (
-					<Link to="/home">Enter pixpick</Link>
-				) : (
-					<Link to="/login" search={{}}>
-						Log in
-					</Link>
-				)}
-			</Button>
+		<div className="flex min-h-dvh flex-col">
+			<Navbar session={session} />
+			<Hero session={session} />
+			<HowItWorks />
+			<Features />
+			<Cta session={session} />
 		</div>
 	);
 }
