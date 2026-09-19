@@ -4,6 +4,7 @@ import {
 	Link,
 	Outlet,
 	redirect,
+	useMatchRoute,
 	useRouter,
 } from "@tanstack/react-router";
 
@@ -11,6 +12,7 @@ import { api } from "@/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { sessionQueryOptions } from "@/features/auth/api";
+import { BottomNav } from "@/features/navigation/BottomNav";
 
 export const Route = createFileRoute("/_app")({
 	beforeLoad: ({ context, location }) => {
@@ -43,11 +45,21 @@ function useLogout() {
 function AppLayout() {
 	const { session } = Route.useRouteContext();
 	const logout = useLogout();
+	const matchRoute = useMatchRoute();
+
+	// Same pattern as isUploadView in albums/$albumId/route.tsx: one
+	// useMatchRoute call here, centralized, instead of BottomNav
+	// recomputing its own matches (design.md's mitigation for a future
+	// third tab).
+	const isHome = !!matchRoute({ to: "/home" });
+	const isAlbums = !!matchRoute({ to: "/albums", fuzzy: true });
+	const isSwipeDeck = !!matchRoute({ to: "/albums/$albumId/swipe" });
+	const activeTab = isHome ? "home" : isAlbums ? "albums" : null;
 
 	return (
 		<div className="flex min-h-dvh flex-col">
 			<header className="flex items-center justify-between gap-4 border-b p-4">
-				<nav className="flex items-center gap-4">
+				<nav className="hidden items-center gap-4 md:flex">
 					{/* The way back in from anywhere (app-entry spec): one more
 					link beside the one already here, with the same active
 					treatment -- two links don't make a navigation component
@@ -89,9 +101,10 @@ function AppLayout() {
 					Log out
 				</Button>
 			</header>
-			<main className="flex-1">
+			<main className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
 				<Outlet />
 			</main>
+			{!isSwipeDeck && <BottomNav activeTab={activeTab} />}
 		</div>
 	);
 }
