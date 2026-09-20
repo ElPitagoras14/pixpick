@@ -23,6 +23,11 @@ function AlbumLayout() {
 	const { albumId } = Route.useParams();
 	const { data: album } = useSuspenseQuery(albumQueryOptions(albumId));
 	const matchRoute = useMatchRoute();
+	// The album's own view goes back to the list; every subview beneath
+	// it (upload, swipe) goes back to this album (app-navigation spec:
+	// the destination depends on which screen this is, not on how it was
+	// reached, so it can't fork by viewport either -- see design.md).
+	const isAlbumView = !!matchRoute({ to: "/albums/$albumId" });
 	// The upload view is its own flow, not a place to jump to Share or to
 	// "Upload photos" again. What that changes about the back link is
 	// where it points, not whether it exists (D1): it is drawn here for
@@ -34,22 +39,22 @@ function AlbumLayout() {
 		<div className="mx-auto max-w-3xl p-6">
 			<div className="mb-6 flex items-center justify-between gap-4">
 				<div>
-					{isUploadView ? (
+					{isAlbumView ? (
+						<Link
+							to="/albums"
+							search={{ group: "own" }}
+							className="hidden text-muted-foreground text-xs md:block"
+						>
+							← Albums
+						</Link>
+					) : (
 						<Link
 							to="/albums/$albumId"
 							params={{ albumId }}
 							search={{ filter: "all" }}
-							className="text-muted-foreground text-xs"
+							className="hidden text-muted-foreground text-xs md:block"
 						>
 							← Back to album
-						</Link>
-					) : (
-						<Link
-							to="/albums"
-							search={{ group: "own" }}
-							className="text-muted-foreground text-xs"
-						>
-							← Albums
 						</Link>
 					)}
 					<h1 className="text-xl font-bold">{album.title}</h1>
