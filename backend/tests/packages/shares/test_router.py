@@ -17,9 +17,9 @@ async def test_the_owner_gets_a_share_link_for_their_album(client, connection):
 
     assert response.status_code == 200
     url = response.json()["data"]["url"]
-    # Built from the configured public address, never from the request's
-    # own scheme or host -- the test client talks to "testserver", which
-    # never appears here (album-sharing spec, task 2.1).
+    # Built from the configured public address, never from the request's own
+    # scheme or host -- the test client talks to "testserver", which never
+    # appears here.
     assert url.startswith(f"{settings.public_url.rstrip('/')}/a/")
     assert "testserver" not in url
 
@@ -127,10 +127,9 @@ async def test_unknown_revoked_and_foreign_tokens_answer_identically(client, con
 async def test_entering_an_expired_album_answers_like_an_unknown_token(
     client, connection, monkeypatch
 ):
-    """album-retention spec: the album's row and its live token can
-    both still exist -- the physical delete is deferred (D3) -- but
-    entering SHALL respond exactly as it does for a token that never
-    existed, and SHALL NOT grant membership.
+    """The album's row and its live token can both still exist -- the
+    physical delete is deferred -- but entering SHALL respond exactly as it
+    does for a token that never existed, and SHALL NOT grant membership.
     """
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     owner = await create_user(connection)

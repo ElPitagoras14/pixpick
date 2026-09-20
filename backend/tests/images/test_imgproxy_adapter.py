@@ -16,7 +16,7 @@ def _decode_source(url: str) -> str:
 
 def test_building_every_variant_address_emits_no_network_request(monkeypatch):
     """Also stands in for "an entire album's worth of addresses": building
-    many is still zero requests (image-delivery spec)."""
+    many is still zero requests."""
 
     def _forbidden_connect(*_args, **_kwargs):
         raise AssertionError("variant_url must not open any connection")
@@ -37,10 +37,10 @@ def test_the_address_encodes_the_bucket_and_object_key():
 
 
 def test_the_address_names_whichever_providers_space_is_active(monkeypatch):
-    """Task 7.1 (image-delivery spec, D10): the bucket comes from the
-    active storage port's own `bucket`, not from MinIO's fixed config --
-    swapping the active port for one naming a different space changes
-    the address, instead of it staying pinned to MinIO's own."""
+    """The bucket comes from the active storage port's own `bucket`, not
+    from MinIO's fixed config -- swapping the active port for one naming a
+    different space changes the address, instead of it staying pinned to
+    MinIO's own."""
     import src.images.adapters.imgproxy as imgproxy_module
 
     class _OtherProviderPort:
@@ -63,8 +63,8 @@ def test_the_address_is_stable_for_the_same_input():
 
 
 def test_changing_a_variant_definition_changes_its_address(monkeypatch):
-    """The regression D7 depends on: presets would make this fail, since
-    the transformer -- not the address -- would own the definition."""
+    """Presets would make this fail, since the transformer -- not the
+    address -- would own the definition."""
     adapter = ImgproxyAdapter()
     before = adapter.variant_url(object_key="albums/a/p", variant=Variant.RATING)
 

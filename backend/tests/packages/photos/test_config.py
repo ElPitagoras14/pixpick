@@ -1,6 +1,5 @@
-"""The two limits granting evaluates come from the environment, not from
-the code (account-quota spec, photo-upload spec): changing either one
-SHALL NOT require editing anything here.
+"""The two limits granting evaluates come from the environment, not from the
+code: changing either one SHALL NOT require editing anything here.
 """
 
 from src.packages.photos.config import PhotosSettings

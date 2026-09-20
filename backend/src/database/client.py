@@ -12,20 +12,16 @@ from .config import (
     database_settings,
 )
 
-# Explicit pool limits (D2, D11): five permanent connections and fifteen of
-# overflow, a ceiling of twenty per process. Not left to the access layer's
-# defaults, and not configuration -- see D11 in add-backend-data-layer's
-# design for the invariant these two numbers protect.
+# Explicit pool limits: five permanent connections and fifteen of
+# overflow, a ceiling of twenty per process. Not left to the access
+# layer's defaults, and not configuration: the ceiling is what keeps a
+# burst of requests from opening more connections than Postgres accepts.
 POOL_SIZE = 5
 MAX_OVERFLOW = 15
 
-# A connection that's gone stale -- the network dropped it, or Postgres
-# closed it -- fails the next query with a driver error instead of a
-# clean retry, unless the pool checks it first (D11 in harden-local-
-# profile's design: "la validación y el reciclado de conexiones del
-# pool"). `pool_recycle` bounds how long any one connection is trusted
-# without that check at all, so a connection killed from the server side
-# for being older than that never gets the chance to fail a query first.
+# A stale connection fails the next query with a driver error unless the
+# pool checks it first. `pool_recycle` bounds how long one is trusted
+# without that check at all.
 POOL_PRE_PING = True
 POOL_RECYCLE_SECONDS = 1_800
 
@@ -36,10 +32,8 @@ engine: AsyncEngine = create_async_engine(
     pool_pre_ping=POOL_PRE_PING,
     pool_recycle=POOL_RECYCLE_SECONDS,
     connect_args={
-        # Three session-level ceilings (database-access spec), forwarded
-        # to Postgres the same way `psql`'s own `-c` flag would: no
-        # statement runs, no lock is waited on, and no transaction sits
-        # idle, past what `database.config` declares.
+        # Forwarded the same way `psql -c` would: no statement, lock wait or
+        # idle transaction outlives what `database.config` declares.
         "options": (
             f"-c statement_timeout={STATEMENT_TIMEOUT_MS} "
             f"-c lock_timeout={LOCK_TIMEOUT_MS} "
@@ -51,11 +45,8 @@ engine: AsyncEngine = create_async_engine(
 
 
 async def check_connectivity() -> None:
-    """Raises `DatabaseUnavailableError` if the database cannot be reached.
-
-    Called during startup (main.py's lifespan) so the process fails fast
-    and explicitly instead of starting and serving broken requests.
-    """
+    """Called at startup, so the process fails fast instead of serving
+    broken requests."""
     try:
         async with engine.connect() as connection:
             await connection.execute(text("select 1"))
@@ -68,10 +59,9 @@ async def dispose_engine() -> None:
     await engine.dispose()
 
 
-# --- The five functions every access to the database goes through (D3). ---
-# Each receives the connection it runs on: none of them opens, closes, or
-# obtains one from implicit shared state. The caller controls the
-# transaction's scope by choosing which connection to pass in.
+# --- The five functions every access to the database goes through. ---
+# Each receives the connection it runs on, so the caller controls the
+# transaction's scope by choosing which one to pass in.
 
 
 async def write(connection: AsyncConnection, query: str, params: dict | None = None) -> None:
@@ -96,12 +86,8 @@ async def fetch_one[T: BaseModel](
     model: type[T],
     params: dict | None = None,
 ) -> T | None:
-    """Reads at most one row, validated against `model`.
-
-    A query that stops returning a field the model declares fails here,
-    at the boundary of the data layer, instead of downstream as a missing
-    key (database-access spec).
-    """
+    """Reads at most one row, validated against `model`, so a query that
+    stops returning a declared field fails here and not downstream."""
     try:
         result = await connection.execute(text(query), params or {})
         row = result.mappings().one_or_none()
@@ -126,11 +112,8 @@ async def fetch_all[T: BaseModel](
 
 
 async def fetch_val(connection: AsyncConnection, query: str, params: dict | None = None):
-    """Reads a single scalar value that the query always produces exactly
-    one row for (a count, an aggregate, a boolean check) -- never a query
-    that can legitimately match nothing, which is what `fetch_val_or_none`
-    is for.
-    """
+    """For a query that always produces exactly one row -- a count, an
+    aggregate, a check. One that can match nothing wants `fetch_val_or_none`."""
     try:
         result = await connection.execute(text(query), params or {})
         return result.scalar_one()
@@ -139,12 +122,8 @@ async def fetch_val(connection: AsyncConnection, query: str, params: dict | None
 
 
 async def fetch_val_or_none(connection: AsyncConnection, query: str, params: dict | None = None):
-    """Reads a single scalar value from a query that may legitimately
-    match no row (an id looked up by a filter that can miss, a `delete
-    ... returning` that found nothing to delete) -- `None` in that case,
-    instead of `fetch_val`'s `scalar_one()` raising (added by
-    add-albums-and-upload, for exactly that shape of query).
-    """
+    """For a query that may match no row -- a lookup that can miss, a
+    `delete ... returning` that found nothing. `None` instead of raising."""
     try:
         result = await connection.execute(text(query), params or {})
         return result.scalar_one_or_none()

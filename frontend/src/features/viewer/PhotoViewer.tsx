@@ -10,20 +10,19 @@ import {
 
 import { cn } from "@/lib/utils";
 
-/** What the viewer needs of a photo, and nothing else: the address of
- * the largest variant. Both screens that open it already carry this on
- * the photos they were listing, so the viewer never asks for anything of
- * its own (D3). */
+/** What the viewer needs of a photo, and nothing else: the address of the
+ * largest variant. Both screens that open it already carry this on the
+ * photos they were listing, so the viewer never asks for anything of its
+ * own. */
 export interface ViewerPhoto {
 	id: string;
 	viewerUrl: string;
 }
 
 interface PhotoViewerProps {
-	/** The set to move through, in the order it is being looked at (D3):
-	 * the gallery's filtered list, or the rating sequence. The viewer
-	 * moves inside whatever it was handed and knows nothing about
-	 * filters. */
+	/** The set to move through, in the order it is being looked at: the
+	 * gallery's filtered list, or the rating sequence. The viewer moves
+	 * inside whatever it was handed and knows nothing about filters. */
 	photos: ViewerPhoto[];
 	openPhotoId: string;
 	/** Opens another photo of the set -- the caller writes it to the
@@ -32,9 +31,9 @@ interface PhotoViewerProps {
 	onClose: () => void;
 }
 
-// What the zoom is capped at until the image reports its real size (D6,
-// Risks): deliberately conservative -- letting it open wide for the first
-// second and then snapping back is worse than starting tight.
+// What the zoom is capped at until the image reports its real size.
+// Deliberately conservative: letting it open wide for the first second
+// and then snapping back is worse than starting tight.
 const FALLBACK_MAX_SCALE = 2;
 const DOUBLE_TAP_MS = 300;
 // How much of the wheel's travel a doubling of the scale takes.
@@ -59,17 +58,16 @@ function pointOf(event: Event): [number | undefined, number | undefined] {
 	return [undefined, undefined];
 }
 
-/** Looking at one photo in detail (photo-viewer spec): it shows the
- * largest variant -- never the original, which this product does not
- * serve -- fitted whole inside the screen whatever its shape, zoomable
- * and pannable up to the point where that variant runs out of pixels of
- * its own, and steppable through the set it was given.
+/** Looking at one photo in detail: it shows the largest variant -- never
+ * the original, which this product does not serve -- fitted whole inside
+ * the screen whatever its shape, zoomable and pannable up to the point
+ * where that variant runs out of pixels of its own, and steppable through
+ * the set it was given.
  *
  * Zoom and pan are written straight onto the element, not held in React
- * state: the image has to track the fingers with no interpolation, and
- * a re-render per frame reads as lag -- the same reasoning the rating
- * card's drag already follows.
- */
+ * state: the image has to track the fingers with no interpolation, and a
+ * re-render per frame reads as lag -- the same reasoning the rating card's
+ * drag already follows. */
 export function PhotoViewer({
 	photos,
 	openPhotoId,
@@ -164,11 +162,10 @@ export function PhotoViewer({
 		[applyTransform],
 	);
 
-	/** The ceiling, derived rather than written down (D6): the variant's
-	 * own pixels against the size it is being shown at. Recomputed
-	 * whenever either side of that comparison can have changed -- a new
-	 * photo, or a resized window -- so it never has to be kept in sync
-	 * by hand. */
+	/** The ceiling, derived rather than written down: the variant's own pixels
+	 * against the size it is being shown at. Recomputed whenever either side
+	 * of that comparison can have changed -- a new photo, or a resized window
+	 * -- so it never has to be kept in sync by hand. */
 	const measureMaxScale = useCallback(() => {
 		const image = imageRef.current;
 		if (!image?.naturalWidth || !image.offsetWidth) return;
@@ -182,9 +179,9 @@ export function PhotoViewer({
 		}
 	}, [applyTransform]);
 
-	// Back to the whole photo on every change of photo (photo-viewer
-	// spec): the next one must not arrive magnified on a region nobody
-	// chose. Runs before paint, so it is never briefly visible zoomed.
+	// Back to the whole photo on every change of photo: the next one must not
+	// arrive magnified on a region nobody chose. Runs before paint, so it is
+	// never briefly visible zoomed.
 	useLayoutEffect(() => {
 		if (shownPhotoRef.current === openPhotoId) return;
 		shownPhotoRef.current = openPhotoId;
@@ -202,12 +199,11 @@ export function PhotoViewer({
 		return () => window.removeEventListener("resize", onResize);
 	}, [measureMaxScale]);
 
-	// Nothing here locks the page's own scroll. Hiding the body's
-	// overflow is the usual way to keep what is underneath still, and it
-	// throws the scroll position away -- which is exactly what closing
-	// has to give back (photo-viewer spec). The overlay covers the
-	// screen and takes the touches itself (`touch-none` below), so there
-	// is nothing left for the page behind to react to.
+	// Nothing here locks the page's own scroll. Hiding the body's overflow is
+	// the usual way to keep what is underneath still, and it throws the scroll
+	// position away -- which is exactly what closing has to give back. The
+	// overlay covers the screen and takes the touches itself (`touch-none`
+	// below), so there is nothing left for the page behind to react to.
 
 	const goTo = useCallback(
 		(target: ViewerPhoto | undefined) => {
@@ -226,18 +222,17 @@ export function PhotoViewer({
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [onClose, goTo, previous, next]);
 
-	// One gesture object for the three ways of zooming and the pan (D5),
-	// all from the library the rating card already uses -- no new
-	// dependency, and no second mechanism listening to the same finger.
+	// One gesture object for the three ways of zooming and the pan, all from
+	// the library the rating card already uses -- no new dependency, and no
+	// second mechanism listening to the same finger.
 	useGesture(
 		{
 			onDrag: ({ down, movement: [mx, my], memo, tap, event }) => {
 				if (tap) {
 					const now = Date.now();
-					// Double tap is the one-step toggle (photo-viewer spec):
-					// out to the whole photo, or in to the ceiling, never a
-					// gradual climb back. Detected off the same gesture that
-					// already tells a tap from a drag (D4), so there is one
+					// Double tap is the one-step toggle: out to the whole photo, or in to
+					// the ceiling, never a gradual climb back. Detected off the same
+					// gesture that already tells a tap from a drag, so there is one
 					// criterion and not two.
 					if (now - lastTapRef.current < DOUBLE_TAP_MS) {
 						lastTapRef.current = 0;
@@ -269,9 +264,8 @@ export function PhotoViewer({
 				zoomAround(scale, originX, originY);
 			},
 			onWheel: ({ delta: [, dy], event }) => {
-				// The wheel zooms the photo and nothing else: without this
-				// the same turn would also scroll whatever is behind the
-				// overlay (photo-viewer spec).
+				// The wheel zooms the photo and nothing else: without this the same
+				// turn would also scroll whatever is behind the overlay.
 				event.preventDefault();
 				const factor = 2 ** (-dy / WHEEL_SCALE_DIVISOR);
 				zoomAround(
@@ -307,11 +301,10 @@ export function PhotoViewer({
 
 	return (
 		<div
-			// `touch-none` over the whole overlay, not just the photo: a
-			// pinch or a drag anywhere on it is the viewer's, so the page
-			// underneath neither scrolls nor zooms (photo-viewer spec).
-			// Taps still reach the buttons -- this only takes the browser's
-			// own scroll and zoom gestures away.
+			// `touch-none` over the whole overlay, not just the photo: a pinch or a
+			// drag anywhere on it is the viewer's, so the page underneath neither
+			// scrolls nor zooms. Taps still reach the buttons -- this only takes the
+			// browser's own scroll and zoom gestures away.
 			className="bg-background fixed inset-0 z-50 flex touch-none flex-col"
 			style={{ touchAction: "none" }}
 			role="dialog"
@@ -345,16 +338,16 @@ export function PhotoViewer({
 
 			<div
 				ref={frameRef}
-				// `touch-none` is what keeps a pinch on the photo from
-				// zooming the page behind it instead (photo-viewer spec):
-				// the browser hands the gesture over rather than claiming it.
+				// `touch-none` is what keeps a pinch on the photo from zooming the page
+				// behind it instead: the browser hands the gesture over rather than
+				// claiming it.
 				className="relative flex flex-1 touch-none items-center justify-center overflow-hidden"
 				style={{ touchAction: "none" }}
 			>
 				<img
 					ref={imageRef}
-					// The largest variant of the catalog, never the file as it
-					// was uploaded (photo-viewer spec).
+					// The largest variant of the catalog, never the file as it was
+					// uploaded.
 					src={photo.viewerUrl}
 					alt=""
 					draggable={false}

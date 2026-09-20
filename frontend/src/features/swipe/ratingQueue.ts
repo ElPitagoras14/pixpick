@@ -4,9 +4,9 @@ import { useCallback, useRef, useState } from "react";
 import { albumQueryOptions } from "@/features/albums/api";
 import { ratePhoto } from "@/features/swipe/api";
 
-// Spaced retries, not exponential from zero (D6): a rating that fails
-// once almost always fails because of a momentary blip, so the first
-// retry comes quickly; only a rating that keeps failing waits longer.
+// Spaced retries, not exponential from zero: a rating that fails once
+// almost always fails because of a momentary blip, so the first retry comes
+// quickly; only a rating that keeps failing waits longer.
 const RETRY_DELAYS_MS = [500, 2000, 5000];
 
 export interface FailedRating {
@@ -22,13 +22,12 @@ function wait(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Sends ratings one at a time, in the order they were decided, retrying
- * a failure a few times before giving up on that one item (D6): never in
- * a batch, so closing the tab loses at most the single request in
- * flight, not everything queued behind it. A rating that exhausts its
- * retries is reported through `failed` -- its own decided value included,
- * never silently dropped -- while the queue moves on to what's next.
- */
+/** Sends ratings one at a time, in the order they were decided, retrying a
+ * failure a few times before giving up on that one item: never in a batch,
+ * so closing the tab loses at most the single request in flight, not
+ * everything queued behind it. A rating that exhausts its retries is
+ * reported through `failed` -- its own decided value included, never
+ * silently dropped -- while the queue moves on to what's next. */
 export function useRatingQueue(albumId: string) {
 	const [failed, setFailed] = useState<FailedRating[]>([]);
 	const queueRef = useRef<QueueItem[]>([]);

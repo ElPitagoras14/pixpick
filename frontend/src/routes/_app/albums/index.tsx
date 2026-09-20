@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 const ALBUM_GROUPS = ["own", "shared"] as const;
 type AlbumGroup = (typeof ALBUM_GROUPS)[number];
 
-// A closed set with a default (D10, same pattern the gallery's own
-// filter uses): an unrecognized group falls back to "own" instead of
-// producing an error.
+// A closed set with a default, the same pattern the gallery's own filter
+// uses: an unrecognized group falls back to "own" instead of producing an
+// error.
 const albumsSearchSchema = z.object({
 	group: z.enum(ALBUM_GROUPS).catch("own"),
 });
@@ -43,21 +43,20 @@ const EMPTY_GROUP_MESSAGE: Record<AlbumGroup, string> = {
 
 function AlbumsList() {
 	const { data: albums } = useSuspenseQuery(albumsQueryOptions());
-	// The same breakdown the home's own total is sliced from (D3), so what
-	// each card shows always adds up to what the home shows. Only the
-	// albums this person owns appear in it -- what a shared album occupies
-	// is its owner's space, and not this viewer's to see.
+	// The same breakdown the home's own total is sliced from, so what each
+	// card shows always adds up to what the home shows. Only the albums this
+	// person owns appear in it -- what a shared album occupies is its owner's
+	// space, and not this viewer's to see.
 	const { data: usage } = useSuspenseQuery(accountUsageQueryOptions());
 	const usedByAlbumId = new Map(
 		usage.albums.map((entry) => [entry.albumId, entry.usedBytes]),
 	);
 	const { group } = Route.useSearch();
 
-	// Split here, not with a second request (D10, task 5.2): the list the
-	// server already returned distinguishes owned from shared (D9 in
-	// add-share-and-swipe), so grouping and counting each group are two
-	// array filters over data already in hand, and the backend is
-	// untouched.
+	// Split here, not with a second request: the list the server already
+	// returned distinguishes owned from shared, so grouping and counting each
+	// group are two array filters over data already in hand, and the backend
+	// is untouched.
 	const groups: Record<AlbumGroup, AlbumSummary[]> = {
 		own: albums.filter((album) => album.isOwner),
 		shared: albums.filter((album) => !album.isOwner),
@@ -95,9 +94,9 @@ function AlbumsList() {
 			</div>
 
 			{visible.length === 0 ? (
-				// Says what would appear here (task 5.3), so an empty group
-				// never reads like a list still loading -- the suspense
-				// boundary above already handles that state on its own.
+				// Says what would appear here, so an empty group never reads like a
+				// list still loading -- the suspense boundary above already handles
+				// that state on its own.
 				<div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
 					<p className="text-muted-foreground text-sm">
 						{EMPTY_GROUP_MESSAGE[group]}

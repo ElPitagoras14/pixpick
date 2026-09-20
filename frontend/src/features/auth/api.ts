@@ -29,7 +29,7 @@ async function fetchCurrentUser(): Promise<CurrentUser | null> {
 	}
 }
 
-// The one place this query is defined (D9): the root loader and the
+// The one place this query is defined: the root loader and the
 // authenticated layout's guard both consume this same query, so neither
 // keeps a second copy of the session's state.
 export function sessionQueryOptions() {

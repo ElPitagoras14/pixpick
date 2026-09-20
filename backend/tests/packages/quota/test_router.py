@@ -20,9 +20,8 @@ async def test_the_instance_resource_answers_with_only_the_percentage(
 async def test_the_instance_resource_never_reveals_the_raw_total_or_limit(
     client, connection, monkeypatch
 ):
-    """D3 (revisado a pedido del usuario): la capacidad real de la
-    instancia no cruza la respuesta, solo el porcentaje que resulta de
-    ella."""
+    """The instance's real capacity never crosses the response -- only the
+    percentage that follows from it."""
     monkeypatch.setattr("src.packages.quota.service.photos_settings.instance_max_bytes", 10_000)
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -49,8 +48,8 @@ async def test_the_instance_percentage_caps_at_100(client, connection, monkeypat
 async def test_the_instance_resource_does_not_require_owning_anything(
     client, connection, monkeypatch
 ):
-    """Any signed-in person, without needing an album of their own
-    (instance-quota spec): the instance's space belongs to no one."""
+    """Any signed-in person, without needing an album of their own: the
+    instance's space belongs to no one."""
     monkeypatch.setattr("src.packages.quota.service.photos_settings.instance_max_bytes", 8_000)
     stranger = await create_user(connection)
     foreign_album = await create_album(connection, owner_id=stranger.id)
@@ -98,9 +97,9 @@ async def test_the_account_resource_answers_with_the_total_the_limit_and_the_bre
 
 
 async def test_the_account_resource_only_ever_reports_the_signed_in_person(client, connection):
-    """There is no identifier in this path (account-quota spec): another
-    person's albums are invisible to it no matter what, because nothing
-    in the request names whose account to report on."""
+    """There is no identifier in this path: another person's albums are
+    invisible to it no matter what, because nothing in the request names
+    whose account to report on."""
     stranger = await create_user(connection)
     foreign_album = await create_album(connection, owner_id=stranger.id)
     await create_photo(connection, album_id=foreign_album.id, declared_size=4_000)
@@ -137,9 +136,9 @@ async def test_the_owner_gets_an_albums_usage_with_each_photos_size(client, conn
 
 
 async def test_a_member_who_is_not_the_owner_cannot_read_an_albums_usage(client, connection):
-    """What an album occupies is its owner's space (account-quota spec):
-    someone who reached it through a shared link already knows it exists,
-    so this is a refusal and not a disappearance."""
+    """What an album occupies is its owner's space: someone who reached it
+    through a shared link already knows it exists, so this is a refusal and
+    not a disappearance."""
     owner = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)
     await create_photo(connection, album_id=album.id, declared_size=300)
@@ -160,15 +159,14 @@ async def test_a_stranger_gets_the_same_answer_as_for_a_nonexistent_album(client
 
 
 async def test_deleting_a_photo_is_reflected_the_next_time_usage_is_asked_for(client, connection):
-    """What is consulted reflects the moment it was asked (account-quota
-    spec), because it is summed then and not kept as a running total.
+    """What is consulted reflects the moment it was asked, because it is
+    summed then and not kept as a running total.
 
-    The row is removed through the repository on this test's own
-    connection rather than through the endpoint: deleting a photo also
-    deletes its object, so that flow opens a transaction of its own (D6
-    in add-albums-and-upload) which cannot see anything this rollback-only
-    connection wrote. What is being checked here is the reading, and the
-    reading cannot tell how the row went away.
+    The row is removed through the repository on this test's own connection
+    rather than through the endpoint: deleting a photo also deletes its
+    object, so that flow opens a transaction of its own which cannot see
+    anything this rollback-only connection wrote. What is being checked here
+    is the reading, and the reading cannot tell how the row went away.
     """
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)

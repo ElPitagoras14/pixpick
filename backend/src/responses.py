@@ -2,13 +2,12 @@ from .models import ApiModel
 
 
 class ErrorBody(ApiModel):
-    """What an error response names: a machine-readable `code`, a message
-    a person could read, and situational extras that stay `None` when
-    they don't apply -- `field` for a validation failure, `request_id`
-    for an unforeseen one, `details` for whatever a state conflict has
-    that's quantifiable, such as how much room is left, `retry_after_seconds`
-    for a rejection caused by a lack of capacity rather than by either of
-    those (api-conventions spec, harden-local-profile).
+    """What an error response names: a machine-readable `code`, a message a
+    person could read, and situational extras that stay `None` when they
+    don't apply -- `field` for a validation failure, `request_id` for an
+    unforeseen one, `details` for whatever a state conflict has that's
+    quantifiable, such as how much room is left, `retry_after_seconds` for a
+    rejection caused by a lack of capacity rather than by either of those.
     """
 
     code: str
@@ -20,10 +19,10 @@ class ErrorBody(ApiModel):
 
 
 class Envelope[T](ApiModel):
-    """The one shape every endpoint's body has (api-conventions spec):
-    `data` on success, `error` on failure, and the other always `None` --
-    never both, never neither. A client tells success from failure from
-    this shape alone, without knowing the endpoint.
+    """The one shape every endpoint's body has: `data` on success, `error`
+    on failure, and the other always `None` -- never both, never neither. A
+    client tells success from failure from this shape alone, without knowing
+    the endpoint.
     """
 
     data: T | None = None

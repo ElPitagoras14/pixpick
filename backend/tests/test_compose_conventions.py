@@ -1,21 +1,20 @@
-"""Keeps the two declarations of the environment from drifting apart
-(local-environment spec).
+"""Keeps the two declarations of the environment from drifting apart.
 
 The project declares its environment twice: `compose.yaml` consumes
-published images, `compose.dev.yaml` builds them from source, and neither
-is ever combined with the other. That independence is the point, and the
-price is that everything else -- the variables each service receives, the
+published images, `compose.dev.yaml` builds them from source, and neither is
+ever combined with the other. That independence is the point, and the price
+is that everything else -- the variables each service receives, the
 addresses the services reach each other by, the healthchecks, the
-dependencies, the volumes -- is written twice and can quietly stop
-agreeing. Nothing fails visibly when it does: each file keeps working on
-its own, saying something different.
+dependencies, the volumes -- is written twice and can quietly stop agreeing.
+Nothing fails visibly when it does: each file keeps working on its own,
+saying something different.
 
 So the rule is narrow enough to check: the two files differ in exactly two
 things, where each image comes from and which ports reach the host. Every
 other field must be equal, service for service.
 
-It lives in the suite rather than in a standalone script for the same
-reason as the schema checks next to it: a script has to be remembered.
+It lives in the suite rather than in a standalone script for the same reason
+as the schema checks next to it: a script has to be remembered.
 """
 
 from pathlib import Path
@@ -31,12 +30,12 @@ _BUILT = _REPO_ROOT / "compose.dev.yaml"
 # other key is compared verbatim.
 _MAY_DIFFER = frozenset({"image", "build", "ports"})
 
-# `migrate` alone may also differ on these two (harden-local-profile):
-# compose.dev.yaml already assumes the repo is checked out to build the
-# image from source, so it also bind-mounts dbmate/ and drops
-# --no-dump-schema, regenerating dbmate/schema.sql as part of coming up.
-# compose.yaml consumes the published image specifically so a deployment
-# never needs the repo checked out, which that mount would defeat.
+# `migrate` alone may also differ on these two: compose.dev.yaml already
+# assumes the repo is checked out to build the image from source, so it also
+# bind-mounts dbmate/ and drops --no-dump-schema, regenerating
+# dbmate/schema.sql as part of coming up. compose.yaml consumes the
+# published image specifically so a deployment never needs the repo checked
+# out, which that mount would defeat.
 _MIGRATE_MAY_ALSO_DIFFER = frozenset({"volumes", "command"})
 
 
@@ -156,10 +155,9 @@ def test_the_networks_and_volumes_are_the_same(published, built):
 
 
 def test_every_service_declares_a_memory_ceiling_and_a_restart_policy(published, built):
-    """Task 6.3 (local-environment spec): every service says on its own
-    how much memory it can take and what happens if it ends unexpectedly,
-    instead of some of them being left at whatever the runtime defaults
-    to."""
+    """Every service says on its own how much memory it can take and what
+    happens if it ends unexpectedly, instead of some of them being left at
+    whatever the runtime defaults to."""
     offenders = []
     for path, document in ((_PUBLISHED, published), (_BUILT, built)):
         for name, service in document["services"].items():

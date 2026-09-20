@@ -6,9 +6,9 @@ from .schemas import UserRecord
 
 
 class CurrentUserResponse(ApiModel):
-    """What `/auth/me` describes (session-management spec): the person's
-    own descriptive data, and deliberately nothing about the session
-    that authenticated the request -- no id, no hash.
+    """What `/auth/me` describes: the person's own descriptive data, and
+    deliberately nothing about the session that authenticated the request --
+    no id, no hash.
     """
 
     id: UUID

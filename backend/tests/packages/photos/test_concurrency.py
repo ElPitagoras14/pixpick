@@ -1,7 +1,7 @@
-"""D12: the position each batch assigns, and the occupancy each counts
-(D14), come from a lock on the album row -- not from hoping requests
-never overlap. This is the one place that lock actually has to be
-proven, with two real, independent connections racing for real.
+"""The position each batch assigns, and the occupancy each counts, come from
+a lock on the album row -- not from hoping requests never overlap. This is
+the one place that lock actually has to be proven, with two real,
+independent connections racing for real.
 """
 
 import asyncio
@@ -41,11 +41,11 @@ async def test_two_batches_granted_at_once_never_claim_the_same_position(test_en
 async def test_two_batches_of_different_owners_never_exceed_the_instances_space(
     test_engine, fake_storage, monkeypatch
 ):
-    """D1 in add-instance-quota: the instance's limit spans every account,
-    so the point of exclusion has to be the instance and not the person.
-    Two batches of two different owners lock two different rows -- today
-    the owner's own row -- and would each read the same instance total,
-    granting between them more than the instance allows.
+    """The instance's limit spans every account, so the point of exclusion
+    has to be the instance and not the person. Two batches of two different
+    owners lock two different rows -- today the owner's own row -- and would
+    each read the same instance total, granting between them more than the
+    instance allows.
 
     Asserted over the usage the instance is left with, never over what
     either call returned, the same way the account-scoped test above is:
@@ -88,14 +88,14 @@ async def test_two_batches_of_different_owners_never_exceed_the_instances_space(
 async def test_two_batches_in_different_albums_never_exceed_the_accounts_space(
     test_engine, fake_storage, monkeypatch
 ):
-    """D1: the account's limit spans every album its owner has, so the
-    point of exclusion has to be the person and not the album. Two
-    batches in two albums of the same person lock two different rows and
-    would each read the same total, granting twice what fits.
+    """The account's limit spans every album its owner has, so the point of
+    exclusion has to be the person and not the album. Two batches in two
+    albums of the same person lock two different rows and would each read
+    the same total, granting twice what fits.
 
-    Asserted over the usage the account is left with, never over what
-    either call returned: which of the two wins the lock is a race, and
-    the invariant is that between them they never pass the limit.
+    Asserted over the usage the account is left with, never over what either
+    call returned: which of the two wins the lock is a race, and the
+    invariant is that between them they never pass the limit.
     """
     monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_500)
     async with test_engine.begin() as setup:

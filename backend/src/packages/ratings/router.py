@@ -14,9 +14,8 @@ from src.responses import Envelope
 from . import service
 from .responses import AlbumStatsResponse, PendingPhotoResponse, RatingResponse
 
-# Rating is open to any member, not only the owner (photo-rating spec):
-# `get_accessible_album` is the same dependency `photos.router` uses for
-# viewing the grid.
+# Rating is open to any member, not only the owner: `get_accessible_album`
+# is the same dependency `photos.router` uses for viewing the grid.
 router = APIRouter(prefix="/albums/{album_id}")
 
 
@@ -36,12 +35,12 @@ async def list_pending(
 
 @router.get("/stats")
 async def get_album_stats(
-    # Owner-only (album-stats spec): a member who isn't the owner gets
-    # `ForbiddenError`, a stranger gets `NotFoundError` -- the same
-    # dependency `photos.router.grant_photos` uses for the same reason.
-    # The gallery above uses `get_accessible_album` instead; the two
-    # endpoints, not a condition inside either response, are what decide
-    # who can see what (D-separate-resources).
+    # Owner-only: a member who isn't the owner gets `ForbiddenError`, a
+    # stranger gets `NotFoundError` -- the same dependency
+    # `photos.router.grant_photos` uses for the same reason. The gallery
+    # above uses `get_accessible_album` instead; the two endpoints, not a
+    # condition inside either response, are what decide who can see what
+    # (D-separate-resources).
     album: AlbumRecord = Depends(get_owned_album),
     connection: AsyncConnection = Depends(get_connection),
 ) -> Envelope[AlbumStatsResponse]:

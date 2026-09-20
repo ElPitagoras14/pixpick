@@ -13,14 +13,9 @@ from .security import generate_session_token, hash_session_token
 async def complete_login(
     connection: AsyncConnection, identity: ExternalIdentity
 ) -> tuple[UserRecord, str]:
-    """Establishes a session for an identity a provider already vouched
-    for: creates or refreshes the user, drops that user's expired
-    sessions (D8), and opens a fresh one.
-
-    Returns the user together with the *raw* session token -- the only
-    place it exists outside the cookie it becomes; the table stores only
-    its hash (D7, session-management spec).
-    """
+    """Creates or refreshes the user, drops their expired sessions, and opens
+    a fresh one. Returns the *raw* token: the only place it exists outside
+    the cookie it becomes, since the table stores only its hash."""
     user = await repository.upsert_user(connection, identity)
     await repository.delete_expired_sessions_for_user(connection, user.id)
 
@@ -36,13 +31,11 @@ async def complete_login(
 
 
 async def resolve_session(connection: AsyncConnection, token: str) -> UserRecord | None:
-    """The user a raw session token authenticates, or `None` if it
-    doesn't (or no longer does)."""
+    """The user a raw session token authenticates, or `None`."""
     return await repository.get_user_by_session_token_hash(connection, hash_session_token(token))
 
 
 async def end_session(connection: AsyncConnection, token: str) -> None:
-    """Removes the session's own row (session-management spec): the
-    server no longer honors this token, regardless of whether the
-    browser still holds the cookie."""
+    """Removes the session row, so the token stops being honored whether or
+    not the browser still holds the cookie."""
     await repository.delete_session_by_token_hash(connection, hash_session_token(token))

@@ -50,10 +50,10 @@ def test_the_address_is_stable_for_the_same_input(monkeypatch):
 
 
 def test_tampering_the_object_key_invalidates_the_signature(monkeypatch):
-    """Mirrors imgproxy's own tampering test (image-delivery spec): this
-    adapter never talks to ImageKit, so what's verifiable here is that
-    the signature for the tampered path differs from the original --
-    ImageKit itself is what rejects a mismatched one on request."""
+    """Mirrors imgproxy's own tampering test: this adapter never talks to
+    ImageKit, so what's verifiable here is that the signature for the
+    tampered path differs from the original -- ImageKit itself is what
+    rejects a mismatched one on request."""
     adapter = _adapter(monkeypatch)
     original = adapter.variant_url(object_key="albums/a/p", variant=Variant.THUMBNAIL)
     tampered = adapter.variant_url(object_key="albums/a/other", variant=Variant.THUMBNAIL)
@@ -65,8 +65,7 @@ def test_tampering_the_object_key_invalidates_the_signature(monkeypatch):
 
 
 def test_changing_a_variant_definition_changes_its_address(monkeypatch):
-    """The regression D7 (add-media-ports-and-local-adapters) depends on:
-    presets would make this fail, since the transformer -- not the
+    """Presets would make this fail, since the transformer -- not the
     address -- would own the definition."""
     adapter = _adapter(monkeypatch)
     before = adapter.variant_url(object_key="albums/a/p", variant=Variant.RATING)
@@ -82,9 +81,9 @@ def test_changing_a_variant_definition_changes_its_address(monkeypatch):
 
 
 def test_the_fill_variant_uses_the_extract_crop_mode(monkeypatch):
-    """D1 in add-cloud-media-adapters: ImageKit's "extract" crop mode is
-    the "fill" equivalent -- it crops to the exact box, centered by
-    default, matching the only gravity this catalog declares."""
+    """ImageKit's "extract" crop mode is the "fill" equivalent -- it crops
+    to the exact box, centered by default, matching the only gravity this
+    catalog declares."""
     adapter = _adapter(monkeypatch)
 
     url = adapter.variant_url(object_key="albums/a/p", variant=Variant.THUMBNAIL)

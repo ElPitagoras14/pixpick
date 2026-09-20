@@ -29,9 +29,8 @@ router = APIRouter(prefix="/albums/{album_id}/photos")
 
 class GrantPhotoRequest(ApiModel):
     content_type: str
-    # Positive and below the maximum (photo-upload spec, D5): a value that
-    # isn't positive doesn't describe any possible file and, subtracted
-    # from what's available, would grow it instead of consuming it.
+    # A non-positive size would grow what's available instead of consuming
+    # it.
     size: Annotated[int, Field(gt=0, le=MAX_FILE_SIZE)]
     width: Annotated[int, Field(gt=0, le=MAX_DIMENSION)] | None = None
     height: Annotated[int, Field(gt=0, le=MAX_DIMENSION)] | None = None
@@ -46,25 +45,21 @@ class GrantPhotoRequest(ApiModel):
 
 
 class GrantPhotosRequest(ApiModel):
-    # The batch ceiling (D13) is enforced here, before anything reaches
-    # the service: a bigger selection is the client's own job to split
-    # into successive batches, never this endpoint's to accept.
+    # Enforced before anything reaches the service: splitting a bigger
+    # selection into batches is the client's job.
     files: Annotated[list[GrantPhotoRequest], Field(min_length=1, max_length=MAX_BATCH_SIZE)]
 
 
 class ConfirmPhotosRequest(ApiModel):
-    # Same ceiling as granting (photo-upload spec, ADDED requirement): a
-    # confirmation that isn't available yet costs a storage lookup, so the
-    # amount of work one request can trigger has to stay bounded by what
-    # that same request costs to send, not by whatever list a client sends.
+    # Same ceiling as granting: each confirmation costs a storage lookup, so
+    # the work one request triggers stays bounded.
     photo_ids: Annotated[list[UUID], Field(min_length=1, max_length=MAX_BATCH_SIZE)]
 
 
 @router.get("")
 async def list_photos(
-    # A member can view the grid too, not only the owner (album-management
-    # spec, modified by add-share-and-swipe) -- unlike granting, confirming
-    # or deleting a photo below, which stay owner-only.
+    # A member can view the grid too, unlike granting, confirming and
+    # deleting below.
     album: AlbumDetailRow = Depends(get_accessible_album),
     connection: AsyncConnection = Depends(get_connection),
 ) -> Envelope[list[PhotoResponse]]:
@@ -74,12 +69,9 @@ async def list_photos(
 
 @router.get("/gallery")
 async def get_gallery(
-    # A closed set of four values (rating-gallery spec): an out-of-set
-    # value is a malformed request from something other than this
-    # project's own frontend, which never sends one -- its own route
-    # already resolved an unrecognized filter to the default before this
-    # was ever called (D9). This dependency SHALL NOT be leniently
-    # coerced the same way.
+    # Not coerced the way the route does it: by the time a request reaches
+    # here the frontend has already resolved an unrecognized filter to the
+    # default, so an out-of-set value is a malformed request.
     rating_filter: RatingFilter = Query("all", alias="filter"),
     album: AlbumDetailRow = Depends(get_accessible_album),
     user: UserRecord = Depends(get_current_user),
@@ -97,10 +89,8 @@ async def grant_photos(
     album: AlbumRecord = Depends(get_owned_album),
     connection: AsyncConnection = Depends(get_connection),
 ) -> Envelope[GrantBatchResponse]:
-    # Succeeds even when nothing was granted (D4): running out of room in
-    # the album or of space in the account is a fact about their state,
-    # not a malformed request, so the answer says per file what happened
-    # instead of failing the whole call.
+    # Succeeds even when nothing was granted: running out of room is a fact
+    # about state, not a malformed request, so the answer is per file.
     result = await service.grant_batch(
         connection,
         album_id=album.id,
@@ -117,17 +107,13 @@ async def confirm_photos(
     background_tasks: BackgroundTasks,
     user: UserRecord = Depends(get_current_user),
 ) -> Envelope[list[ConfirmationResultResponse]]:
-    # Deliberately not `Depends(get_connection)`: confirming verifies
-    # each photo against its real object in storage, a network call that
-    # SHALL NOT happen while any transaction sits open (D6) -- see
-    # `service.confirm_batch`.
+    # Deliberately not `Depends(get_connection)`: confirming makes a network
+    # call per photo, which must not happen with a transaction open.
     results, warm_up_keys = await service.confirm_batch(
         album_id=album_id, user_id=user.id, photo_ids=body.photo_ids
     )
     if warm_up_keys:
-        # After responding, never before (D7, task 4.5): scheduled here
-        # so it runs once the response is on its way, not folded into
-        # the awaited work above.
+        # Scheduled, so it runs once the response is on its way.
         background_tasks.add_task(warm_up_variants, warm_up_keys)
     return Envelope(data=[ConfirmationResultResponse.from_outcome(r) for r in results])
 

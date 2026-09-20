@@ -1,6 +1,6 @@
-"""Internal data shapes: how a user or a session look inside the backend,
-in the schema's own naming. Never returned to a client as-is -- see
-responses.py for what crosses the API boundary (api-conventions spec).
+"""Internal data shapes: how a user or a session look inside the backend, in
+the schema's own naming. Never returned to a client as-is -- see
+responses.py for what crosses the API boundary.
 """
 
 from datetime import datetime

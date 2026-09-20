@@ -31,9 +31,9 @@ async def test_a_non_member_gets_the_same_response_as_a_nonexistent_photo(client
         f"/api/albums/{album.id}/photos/{uuid.uuid4()}/rating", json={"approved": True}
     )
 
-    # Neither the album nor the photo is visible to a non-member: the
-    # album dependency alone already answers 404 here (album-management
-    # spec), the same shape a stranger to the album always sees.
+    # Neither the album nor the photo is visible to a non-member: the album
+    # dependency alone already answers 404 here, the same shape a stranger
+    # to the album always sees.
     assert response.status_code == missing_response.status_code == 404
     assert response.json() == missing_response.json()
 
@@ -93,9 +93,9 @@ async def test_the_sequence_lists_only_pending_photos_in_album_order(client, con
 
 
 async def test_the_sequence_brings_every_pending_photo_unpaginated(client, connection, monkeypatch):
-    """D11: the sequence is bounded only by the album's own maximum, and
-    never paginates -- a full album's response still brings every one of
-    its pending photos in a single reply.
+    """The sequence is bounded only by the album's own maximum, and never
+    paginates -- a full album's response still brings every one of its
+    pending photos in a single reply.
     """
     monkeypatch.setattr("src.packages.photos.service.photos_settings.album_max_photos", 8)
     owner = await log_in(client, connection)
@@ -110,9 +110,9 @@ async def test_the_sequence_brings_every_pending_photo_unpaginated(client, conne
 
 async def test_deleting_a_photo_reduces_what_is_pending(client, committed_connection, fake_storage):
     """Deleting a photo opens its own transaction, separate from `client`'s
-    (D6) -- see `photos.service.delete_photo` -- so setup here has to
-    actually commit, like `tests/packages/photos/test_router.py`'s own
-    delete tests already do.
+    -- see `photos.service.delete_photo` -- so setup here has to actually
+    commit, like `tests/packages/photos/test_router.py`'s own delete tests
+    already do.
     """
     owner = await log_in(client, committed_connection)
     album = await create_album(committed_connection, owner_id=owner.id)
@@ -136,8 +136,8 @@ async def test_resuming_after_an_interruption_continues_where_it_left_off(client
     third = await create_photo(connection, album_id=album.id, position=3)
 
     client.post(f"/api/albums/{album.id}/photos/{first.id}/rating", json={"approved": True})
-    # "Leaving and coming back later" is just asking for the sequence
-    # again -- there is no session state to resume (photo-rating spec).
+    # "Leaving and coming back later" is just asking for the sequence again
+    # -- there is no session state to resume.
     response = client.get(f"/api/albums/{album.id}/pending")
 
     ids = [row["id"] for row in response.json()["data"]]

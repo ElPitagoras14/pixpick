@@ -3,9 +3,9 @@ from typing import Protocol
 
 
 class Variant(StrEnum):
-    """The closed set of named variants (image-delivery spec). Nothing
-    outside `src/images/catalog.py` names a size, a quality, or a format
-    -- a consumer names one of these and nothing else.
+    """The closed set of named variants. Nothing outside
+    `src/images/catalog.py` names a size, a quality, or a format -- a
+    consumer names one of these and nothing else.
     """
 
     THUMBNAIL = "thumbnail"
@@ -14,10 +14,9 @@ class Variant(StrEnum):
 
 
 class ImagePort(Protocol):
-    """The single operation any image transformer provider offers
-    (image-delivery spec). Synchronous and side-effect free: building and
-    signing an address is local computation, so it never talks to the
-    transformer or the storage.
+    """The single operation any image transformer provider offers.
+    Synchronous and side-effect free: building and signing an address is
+    local computation, so it never talks to the transformer or the storage.
     """
 
     def variant_url(self, *, object_key: str, variant: Variant) -> str:

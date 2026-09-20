@@ -1,8 +1,8 @@
-"""Task 4.7 (database-access spec): the statement timeout is declared as
-connection-level GUCs (src/database/client.py), so this confirms it
-actually cuts a slow statement off and gives its connection back to the
-pool, using an engine of its own with the timeout turned all the way
-down instead of waiting out the real one.
+"""The statement timeout is declared as connection-level GUCs
+(src/database/client.py), so this confirms it actually cuts a slow statement
+off and gives its connection back to the pool, using an engine of its own
+with the timeout turned all the way down instead of waiting out the real
+one.
 """
 
 import pytest

@@ -16,20 +16,20 @@ async def list_pending(
 
 
 async def count_pending(connection: AsyncConnection, *, album_id: UUID, user_id: UUID) -> int:
-    """The same comparison `list_pending` runs (D2, task 3.3): never its
-    own query, so the counter and the sequence can never say two
-    different things about the same person and album.
+    """The same comparison `list_pending` runs: never its own query, so the
+    counter and the sequence can never say two different things about the
+    same person and album.
     """
     rows = await repository.list_pending_photos(connection, album_id=album_id, user_id=user_id)
     return len(rows)
 
 
 async def get_album_stats(connection: AsyncConnection, *, album_id: UUID) -> AlbumStats:
-    """Starts from the album's available photos, not from its ratings
-    (D3, album-stats spec): a photo nobody rated yet still has to appear,
-    at zero, and starting from ratings would leave it out. The summary
-    (task 2.2) is built from the very same rows the per-photo counts
-    are, in one pass, so it can never disagree with their sum.
+    """Starts from the album's available photos, not from its ratings: a
+    photo nobody rated yet still has to appear, at zero, and starting from
+    ratings would leave it out. The summary is built from the very same rows
+    the per-photo counts are, in one pass, so it can never disagree with
+    their sum.
     """
     available = await photos_repository.list_available_photos(connection, album_id=album_id)
     ratings = await repository.list_album_ratings(connection, album_id=album_id)
@@ -63,8 +63,8 @@ async def rate_photo(
     """Membership is already checked by the router's own
     `get_accessible_album` dependency; what's left here is that the photo
     itself belongs to this album and is actually available -- a foreign or
-    not-yet-available photo id SHALL respond exactly like a nonexistent
-    one (photo-rating spec), and SHALL NOT register a rating.
+    not-yet-available photo id SHALL respond exactly like a nonexistent one,
+    and SHALL NOT register a rating.
     """
     if not await repository.photo_is_available_in_album(
         connection, album_id=album_id, photo_id=photo_id

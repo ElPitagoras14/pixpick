@@ -7,9 +7,9 @@ export interface BytesUsage {
 	limitBytes: number;
 }
 
-/** The instance's own scope (instance-quota spec, D3): only the
- * percentage occupied -- the installation's real capacity never reaches
- * the frontend, so there is no total or limit here to show. */
+/** The instance's own scope: only the percentage occupied -- the
+ * installation's real capacity never reaches the frontend, so there is no
+ * total or limit here to show. */
 export interface PercentUsage {
 	usedPercent: number;
 }
@@ -22,29 +22,26 @@ function isPercentUsage(
 
 interface StorageMeterProps {
 	usage: BytesUsage | PercentUsage;
-	/** What this meter names (D5 in add-instance-quota): the account's
-	 * own meter and the instance's share the same bar and full-color
-	 * change, and this is the one thing that tells them apart without
-	 * reading the numbers. */
+	/** What this meter names: the account's own meter and the instance's share
+	 * the same bar and full-color change, and this is the one thing that
+	 * tells them apart without reading the numbers. */
 	label?: string;
-	/** What to say when there's no room left. The account's own default
-	 * points at what the person can do about it; the instance's is not
-	 * this component's to assume, since what's missing there may not be
-	 * this person's to free (upload-feedback spec). */
+	/** What to say when there's no room left. The account's own default points
+	 * at what the person can do about it; the instance's is not this
+	 * component's to assume, since what's missing there may not be this
+	 * person's to free. */
 	fullMessage?: string;
 }
 
-/** How much of a storage scope is taken (account-quota spec, generalized
- * by instance-quota's D5 to also show the instance's). The bar carries
- * the state at a glance, so an empty scope and a full one never read the
- * same even before any caption is read. Not built on the shared
- * `Progress` primitive: this one changes color when there's no room
- * left, which that primitive's indicator doesn't expose.
+/** How much of a storage scope is taken -- one account's, or the whole
+ * instance's. The bar carries the state at a glance, so an empty scope and
+ * a full one never read the same even before any caption is read. Not built
+ * on the shared `Progress` primitive: this one changes color when there's no
+ * room left, which that primitive's indicator doesn't expose.
  *
- * The account's own usage shows the real numbers ("120 of 150 MB", "30
- * MB free"); the instance's shows only the percentage the backend
- * already reduced it to (D3) -- there are no bytes here to fall back to.
- */
+ * The account's own usage shows the real numbers ("120 of 150 MB", "30 MB
+ * free"); the instance's shows only the percentage the backend already
+ * reduced it to -- there are no bytes here to fall back to. */
 export function StorageMeter({
 	usage,
 	label = "Storage",
@@ -60,9 +57,9 @@ export function StorageMeter({
 		? percent >= 100
 		: usage.limitBytes - usage.usedBytes <= 0;
 	// No line at all when there's room left and all there is to say is a
-	// percentage already shown above (D3): the account's own usage always
-	// has something to add -- how much is free -- that the instance's
-	// bytes-free reduced-to-a-percentage never carries.
+	// percentage already shown above: the account's own usage always has
+	// something to add -- how much is free -- that the instance's bytes-free
+	// reduced-to-a-percentage never carries.
 	const belowText = full
 		? fullMessage
 		: percentOnly

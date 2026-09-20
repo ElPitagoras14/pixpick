@@ -13,9 +13,8 @@ interface LandingAccessButtonProps {
 	loggedOutLabel?: string;
 }
 
-// The one place this ternary is written (task 4.1): Cta.tsx and Navbar.tsx
-// import this same component instead of repeating `session ? ... : ...`
-// on their own.
+// The one place this ternary is written: Cta.tsx and Navbar.tsx import this
+// same component instead of repeating `session ?...:...` on their own.
 export function LandingAccessButton({
 	session,
 	size = "lg",

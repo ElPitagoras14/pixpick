@@ -10,14 +10,13 @@ import {
 } from "@/features/quota/api";
 import { StorageMeter } from "@/features/quota/StorageMeter";
 
-// Where signing in lands (identity-provider spec's DEFAULT_RETURN_TO), so
-// it answers "what now?" rather than "you're in" (app-entry spec): how
-// much room is left, what's waiting to be rated, and where to start
-// something new. The album list stays the "what do I have?" screen.
+// Where signing in lands, so it answers "what now?" rather than "you're
+// in": how much room is left, what's waiting to be rated, and where to
+// start something new. The album list stays the "what do I have?" screen.
 export const Route = createFileRoute("/_app/home")({
-	// Only the albums are awaited, and under the list's own key (D1), so
-	// this is the same single request either screen already makes -- never
-	// a second one, in either direction.
+	// Only the albums are awaited, and under the list's own key, so this is
+	// the same single request either screen already makes -- never a second
+	// one, in either direction.
 	loader: ({ context }) =>
 		context.queryClient.ensureQueryData(albumsQueryOptions()),
 	component: Home,
@@ -25,12 +24,11 @@ export const Route = createFileRoute("/_app/home")({
 
 function Home() {
 	const { data: albums } = useSuspenseQuery(albumsQueryOptions());
-	// Requested alongside the albums and never awaited before drawing
-	// (D2), the same way the album view asks for its owner stats: if this
-	// one fails or is still in flight, everything below still renders --
-	// not seeing the meter can't stand between anyone and what they have
-	// left to rate. The instance's own usage travels the same way and for
-	// the same reason (task 4.2 in add-instance-quota).
+	// Requested alongside the albums and never awaited before drawing, the
+	// same way the album view asks for its owner stats: if this one fails or
+	// is still in flight, everything below still renders -- not seeing the
+	// meter can't stand between anyone and what they have left to rate. The
+	// instance's own usage travels the same way and for the same reason.
 	const { data: usage } = useQuery(accountUsageQueryOptions());
 	const { data: instanceUsage } = useQuery(instanceUsageQueryOptions());
 
@@ -45,10 +43,9 @@ function Home() {
 					)}
 					{instanceUsage && (
 						<div className="flex-1">
-							{/* A different label and a different full-space
-							message (D5, app-entry spec's "se distingue cuál es
-							cuál"): this one isn't the viewer's own space, so it
-							never tells them to delete anything of theirs. */}
+							{/* A different label and a different full-space message, so the
+							 * two are told apart: this one isn't the viewer's own space, so it
+							 * never tells them to delete anything of theirs. */}
 							<StorageMeter
 								usage={instanceUsage}
 								label="Instance storage"
@@ -72,11 +69,11 @@ function Home() {
 	);
 }
 
-/** The three states kept apart (D4): no albums at all, albums with
- * nothing left to rate, and albums with photos waiting. The first two
- * both come out as a section with no rows and mean the opposite of each
- * other -- one is "start here", the other is "you're done" -- so they are
- * three branches here and never a test on a list's length. */
+/** The three states kept apart: no albums at all, albums with nothing left
+ * to rate, and albums with photos waiting. The first two both come out as
+ * a section with no rows and mean the opposite of each other -- one is
+ * "start here", the other is "you're done" -- so they are three branches
+ * here and never a test on a list's length. */
 function ToRate({ albums }: { albums: AlbumSummary[] }) {
 	if (albums.length === 0) {
 		return (
@@ -88,11 +85,10 @@ function ToRate({ albums }: { albums: AlbumSummary[] }) {
 		);
 	}
 
-	// Filtered in memory off the list's own response (D1): the count shown
-	// next to an album here is literally the number that album reports,
-	// read twice, not a second source that could drift from it. Shared
-	// albums included -- what waits for this viewer's rating doesn't
-	// depend on who owns it.
+	// Filtered in memory off the list's own response: the count shown next to
+	// an album here is literally the number that album reports, read twice,
+	// not a second source that could drift from it. Shared albums included --
+	// what waits for this viewer's rating doesn't depend on who owns it.
 	const pending = albums.filter((album) => album.pendingCount > 0);
 
 	if (pending.length === 0) {
@@ -111,9 +107,9 @@ function ToRate({ albums }: { albums: AlbumSummary[] }) {
 		<ul className="flex flex-col gap-2">
 			{pending.map((album) => (
 				<li key={album.id}>
-					{/* Straight into the deck, not into the album: from here
-					the next thing to do is rate (app-entry spec), and going
-					through the album is what the list is for. */}
+					{/* Straight into the deck, not into the album: from here the next
+					 * thing to do is rate, and going through the album is what the list
+					 * is for. */}
 					<Link
 						to="/albums/$albumId/swipe"
 						params={{ albumId: album.id }}

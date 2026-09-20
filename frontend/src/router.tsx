@@ -9,9 +9,9 @@ import { routeTree } from "@/routeTree.gen";
 export function getRouter() {
 	const queryClient = new QueryClient();
 
-	// Injected into the router's own context (not just React context) so
-	// route loaders can reach it via `beforeLoad`/`loader` (D8), not only
-	// components via hooks.
+	// Injected into the router's own context (not just React context) so route
+	// loaders can reach it via `beforeLoad`/`loader`, not only components via
+	// hooks.
 	const router = createTanStackRouter({
 		routeTree,
 		context: { queryClient },
@@ -21,9 +21,9 @@ export function getRouter() {
 	});
 
 	// The HTTP client's own concern is only "this request came back
-	// unauthorized" -- whether that means a live session just died, as
-	// opposed to the unremarkable shape of an anonymous request, is
-	// decided here by checking what the app currently believes (D9).
+	// unauthorized" -- whether that means a live session just died, as opposed
+	// to the unremarkable shape of an anonymous request, is decided here by
+	// checking what the app currently believes.
 	onUnauthorized(() => {
 		const sessionQueryKey = sessionQueryOptions().queryKey;
 		if (queryClient.getQueryData(sessionQueryKey)) {

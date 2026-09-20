@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 async def tables_with_column(connection: AsyncConnection, column: str) -> list[str]:
     """Names of the public-schema *base tables* that declare `column`.
 
-    Joined against `information_schema.tables` and filtered to `BASE
-    TABLE` (task 1.4): a view built on a table with this column -- such as
-    `available_photos` on `photos` -- reports the same column through
-    `information_schema.columns` but can never have a trigger of its own,
-    so including it here would make this helper report a false gap.
+    Joined against `information_schema.tables` and filtered to `BASE TABLE`:
+    a view built on a table with this column -- such as `available_photos`
+    on `photos` -- reports the same column through
+    `information_schema.columns` but can never have a trigger of its own, so
+    including it here would make this helper report a false gap.
     """
     result = await connection.execute(
         text(

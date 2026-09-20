@@ -20,10 +20,8 @@ from .schemas import (
 
 
 class PhotoResponse(ApiModel):
-    """One photo of the grid (task 6.4): its declared dimensions, used
-    only to reserve its space before the thumbnail loads, and never a
-    signal of anything else (photo-upload spec).
-    """
+    """The declared dimensions reserve the photo's space before the
+    thumbnail loads, and mean nothing else."""
 
     id: UUID
     position: int
@@ -44,11 +42,9 @@ class PhotoResponse(ApiModel):
 
 
 class PhotoGrantResponse(ApiModel):
-    """What the client applies verbatim to perform its direct upload
-    (object-storage spec): the grant, plus the id the client presents
-    back at confirmation time, plus the index the file had in the request
-    (D4) -- with a batch that can be granted only in part, position in
-    the response no longer identifies which file this answers for."""
+    """The grant, the id to present back at confirmation, and the index the
+    file had in the request -- a batch granted only in part can't be matched
+    up by position."""
 
     index: int
     photo_id: UUID
@@ -68,11 +64,9 @@ class PhotoGrantResponse(ApiModel):
 
 
 class PhotoDenialResponse(ApiModel):
-    """One file the batch asked for and did not get (photo-upload spec):
-    which of the two capacity limits stopped it, and how much was left of
-    that one. Exactly one of the two `remaining` fields is filled in --
-    the one the reason is about -- because slots and bytes are not the
-    same unit and a single number would leave which one implied."""
+    """Which limit stopped the file, and how much was left of it. Exactly
+    one `remaining` field is filled in: slots and bytes are not the same
+    unit."""
 
     index: int
     reason: DenialReason
@@ -90,9 +84,8 @@ class PhotoDenialResponse(ApiModel):
 
 
 class GrantBatchResponse(ApiModel):
-    """The answer to a batch of grant requests (D4): two lists, never one
-    as long as the request. A client that asked for N reads what it got
-    and what it didn't, instead of assuming it got N."""
+    """Two lists, never one as long as the request: a client reads what it
+    got and what it didn't, instead of assuming."""
 
     granted: list[PhotoGrantResponse]
     denied: list[PhotoDenialResponse]
@@ -115,18 +108,12 @@ class ConfirmationResultResponse(ApiModel):
 
 
 class GalleryPhotoResponse(ApiModel):
-    """One photo of the gallery (rating-gallery spec): the grid's own
-    thumbnail, plus `rating` -- `None` exactly when this viewer hasn't
-    rated it yet, and never the same value a rejection would produce
-    (photo-rating spec).
+    """`rating` is `None` exactly when this viewer hasn't rated the photo,
+    never the value a rejection produces.
 
-    `viewer_url` is the largest variant, carried alongside the thumbnail
-    and never instead of it (photo-viewer spec): the grid keeps drawing
-    the thumbnail, and only opening a photo in the viewer requests this
-    one. Building it costs another signed address and no extra query --
-    the same key the thumbnail is built from, named as another variant.
-    The original is never addressed here, or anywhere else.
-    """
+    `viewer_url` travels alongside the thumbnail, never instead of it: the
+    grid keeps drawing the thumbnail and only the viewer requests this one.
+    It costs another signed address and no extra query."""
 
     id: UUID
     position: int
@@ -156,8 +143,7 @@ class GalleryPhotoResponse(ApiModel):
 
 
 class GalleryCountsResponse(ApiModel):
-    """The four counts (D2), always present so the four tabs can show
-    their count without a request of their own."""
+    """Always present, so the four tabs need no request of their own."""
 
     total: int
     approved: int
@@ -175,10 +161,8 @@ class GalleryCountsResponse(ApiModel):
 
 
 class GalleryResponse(ApiModel):
-    """What the gallery endpoint returns: the requested slice of photos,
-    and the four counts regardless of which slice was asked for.
-    Deliberately carries nothing aggregated across viewers -- that's
-    `album-stats`'s own, separate resource (album-stats spec)."""
+    """The requested slice, and the four counts whatever the slice. Carries
+    nothing aggregated across viewers: that is the album's stats."""
 
     photos: list[GalleryPhotoResponse]
     counts: GalleryCountsResponse

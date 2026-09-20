@@ -17,10 +17,8 @@ import {
 	useRevokeShareLink,
 } from "@/features/shares/api";
 
-// Not itemized in this change's original tasks -- added during
-// implementation, because without it there is no way from the interface
-// itself to reach the link this whole change exists to open (see
-// tasks.md 5.4). Owner-only: a non-owner member never gets this button.
+// The only way from the interface itself to reach an album's share link.
+// Owner-only: a member who isn't the owner never gets this button.
 export function ShareDialog({ albumId }: { albumId: string }) {
 	const [open, setOpen] = useState(false);
 
@@ -59,9 +57,9 @@ export function ShareDialog({ albumId }: { albumId: string }) {
 }
 
 function ShareLinkPanel({ albumId }: { albumId: string }) {
-	// Idempotent GET (task 2.1, task 5.4): opening this dialog never itself
-	// changes what's shared -- it fetches the album's current live link,
-	// generating the first one only if it has none yet.
+	// Idempotent GET: opening this dialog never itself changes what's shared
+	// -- it fetches the album's current live link, generating the first one
+	// only if it has none yet.
 	const { data: link } = useSuspenseQuery(shareLinkQueryOptions(albumId));
 	const regenerate = useRegenerateShareLink(albumId);
 	const revoke = useRevokeShareLink(albumId);

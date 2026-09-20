@@ -1,7 +1,7 @@
-"""The one place the two adapters differ on purpose (D2): R2's space
-is created once at the provider, so this one checks and never creates.
-Driven against a stubbed client, since the real provider is a paid
-account nobody has to own to run this suite.
+"""The one place the two adapters differ on purpose: R2's space is created
+once at the provider, so this one checks and never creates. Driven against a
+stubbed client, since the real provider is a paid account nobody has to own
+to run this suite.
 """
 
 import pytest
@@ -37,9 +37,9 @@ async def test_a_missing_space_stops_the_startup_with_its_own_error(adapter, mon
 
 
 async def test_a_missing_space_is_not_reported_as_an_unreachable_storage(adapter, monkeypatch):
-    """Two causes with two fixes (D3): this one is fixed at the provider,
-    so it must not arrive as the error that sends the reader to the
-    network."""
+    """Two causes with two fixes: this one is fixed at the provider, so it
+    must not arrive as the error that sends the reader to the network.
+    """
     monkeypatch.setattr(adapter._server_client, "head_bucket", _answers_with("NoSuchBucket"))
 
     with pytest.raises(StorageNotReadyError):

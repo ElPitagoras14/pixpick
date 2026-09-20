@@ -16,18 +16,17 @@ const config = defineConfig({
 	],
 	server: {
 		proxy: {
-			// Keeps the native dev flow on a single origin (D10): the frontend
-			// still requests the relative `/api` space, and the dev server
-			// forwards it to the backend's native default port (`fastapi dev`).
+			// Keeps the native dev flow on a single origin: the frontend still
+			// requests the relative `/api` space, and the dev server forwards it to
+			// the backend's native default port (`fastapi dev`).
 			"/api": {
 				target: "http://localhost:8000",
 				changeOrigin: true,
 			},
 			// Unlike /api, this doesn't forward to a natively-run process: the
-			// transformer only ever runs in a container and publishes no port
-			// (D5 in add-media-ports-and-local-adapters), so native mode still
-			// reaches it through nginx, keeping its cache in the loop either way.
-			// Matches NGINX_PORT's default; update if that changes.
+			// transformer only ever runs in a container and publishes no port, so
+			// native mode still reaches it through nginx, keeping its cache in the
+			// loop either way. Matches NGINX_PORT's default; update if that changes.
 			"/images": {
 				target: "http://localhost:8080",
 				changeOrigin: true,

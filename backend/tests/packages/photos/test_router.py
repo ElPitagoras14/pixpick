@@ -58,9 +58,9 @@ async def test_an_oversized_file_rejects_the_whole_batch(client, connection, fak
 async def test_a_non_positive_size_is_rejected_naming_the_field(
     client, connection, fake_storage, size
 ):
-    """Task 1.1: a negative or zero declared size doesn't describe any
-    possible file and, subtracted from what's available, would grow it
-    instead of consuming it (photo-upload spec, D5)."""
+    """A negative or zero declared size doesn't describe any possible file
+    and, subtracted from what's available, would grow it instead of
+    consuming it."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
 
@@ -124,10 +124,9 @@ async def test_granting_assigns_sequential_positions_after_existing_photos(
 async def test_a_lot_that_would_exceed_the_maximum_is_granted_in_part(
     client, connection, fake_storage, monkeypatch
 ):
-    """Replaces the rejection this case used to produce (photo-upload
-    spec, modified by add-account-quota): running out of room in an album
-    is a fact about the album's state, not a mistake in what was asked,
-    so what fits is granted and the rest comes back explained.
+    """Replaces the rejection this case used to produce: running out of room
+    in an album is a fact about the album's state, not a mistake in what was
+    asked, so what fits is granted and the rest comes back explained.
     """
     monkeypatch.setattr("src.packages.photos.service.photos_settings.album_max_photos", 2)
     owner = await log_in(client, connection)
@@ -206,11 +205,11 @@ async def test_reducing_the_maximum_does_not_touch_an_existing_album(
 
 async def test_freeing_space_re_enables_granting(committed_connection, fake_storage, monkeypatch):
     """Exercised at the service level, all through `committed_connection`:
-    granting takes a row lock on the album (D12, D14) that a plain HTTP
-    request only holds for the length of that one request, but `client`'s
-    own request-scoped connection stays open for the whole test (it's
-    what makes its rollback-based isolation possible) -- long enough to
-    deadlock against `delete_photo`'s separate, real transaction below.
+    granting takes a row lock on the album that a plain HTTP request only
+    holds for the length of that one request, but `client`'s own
+    request-scoped connection stays open for the whole test (it's what makes
+    its rollback-based isolation possible) -- long enough to deadlock
+    against `delete_photo`'s separate, real transaction below.
     """
     monkeypatch.setattr("src.packages.photos.service.photos_settings.album_max_photos", 1)
     owner = await create_user(committed_connection)
@@ -238,11 +237,11 @@ async def test_freeing_space_re_enables_granting(committed_connection, fake_stor
 async def test_a_non_positive_size_in_the_service_rejects_the_batch_without_touching_quotas(
     committed_connection, fake_storage
 ):
-    """Task 1.2: `_validate_files` is the defense that still holds for a
-    caller that builds `GrantFileInput` directly, bypassing the router's
-    own schema constraint (task 1.1) -- the batch is rejected whole, the
-    file responsible is named, and neither the account's nor the
-    instance's consumption moves (photo-upload spec)."""
+    """`_validate_files` is the defense that still holds for a caller that
+    builds `GrantFileInput` directly, bypassing the router's own schema
+    constraint -- the batch is rejected whole, the file responsible is
+    named, and neither the account's nor the instance's consumption moves.
+    """
     owner = await create_user(committed_connection)
     album = await create_album(committed_connection, owner_id=owner.id)
     await committed_connection.commit()
@@ -273,9 +272,8 @@ async def test_a_non_positive_size_in_the_service_rejects_the_batch_without_touc
 async def test_confirming_more_than_the_batch_ceiling_is_rejected_without_querying_storage(
     client, committed_connection, fake_storage, monkeypatch
 ):
-    """Task 1.4: the same ceiling as granting (photo-upload spec, ADDED
-    requirement) -- a lot above it fails as a validation error before any
-    photo is looked up in storage."""
+    """The same ceiling as granting -- a lot above it fails as a validation
+    error before any photo is looked up in storage."""
     owner = await create_user(committed_connection)
     album = await create_album(committed_connection, owner_id=owner.id)
     _, token = await create_session(committed_connection, user_id=owner.id)
@@ -310,9 +308,9 @@ async def test_granting_for_a_foreign_album_responds_like_a_nonexistent_one(
 async def test_granting_for_an_expired_album_responds_like_a_nonexistent_one(
     client, connection, fake_storage, monkeypatch
 ):
-    """album-retention spec: asking for upload permissions on an album
-    whose plazo already ran out answers exactly like a nonexistent
-    album, the same as the foreign-album case above.
+    """Asking for upload permissions on an album whose retention window already ran out
+    answers exactly like a nonexistent album, the same as the foreign-album
+    case above.
     """
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     owner = await log_in(client, connection)
@@ -363,7 +361,7 @@ async def test_a_member_who_is_not_the_owner_cannot_grant_upload_slots(client, c
     assert response.status_code == 403
 
 
-# --- Confirm: its own transaction (D6), so setup here commits for real. ---
+# --- Confirm: its own transaction, so setup here commits for real. ---
 
 
 async def test_confirming_an_absent_object_leaves_the_photo_pending(
@@ -510,8 +508,8 @@ async def test_a_member_who_is_not_the_owner_cannot_confirm_photos(
 
 
 async def test_a_failed_warmup_is_only_logged(monkeypatch):
-    """Task 4.4: a warm-up failure never propagates -- it's caught and
-    logged, and nothing about a photo's own state depends on it."""
+    """A warm-up failure never propagates -- it's caught and logged, and
+    nothing about a photo's own state depends on it."""
 
     async def _boom(self, url, timeout):
         raise httpx.ConnectError("simulated failure")
@@ -521,7 +519,7 @@ async def test_a_failed_warmup_is_only_logged(monkeypatch):
     await warm_up_variants(["albums/some-album/some-photo"])  # must not raise
 
 
-# --- Delete a photo: its own transaction too (D6). ---
+# --- Delete a photo: its own transaction too. ---
 
 
 async def test_deleting_a_photo_removes_it_and_its_object(
@@ -555,7 +553,7 @@ async def test_deleting_a_photo_removes_it_and_its_object(
 async def test_a_failed_object_deletion_still_leaves_no_dangling_photo_record(
     client, committed_connection, fake_storage, monkeypatch
 ):
-    """D6: the row is gone the moment its own transaction commits, before
+    """The row is gone the moment its own transaction commits, before
     storage is ever called -- so a failure to delete the object leaves an
     orphan in storage, never a row that points at nothing."""
     owner = await create_user(committed_connection)
@@ -606,9 +604,9 @@ async def test_a_member_who_is_not_the_owner_cannot_delete_a_photo(client, commi
 async def test_a_file_that_does_not_fit_is_skipped_and_a_smaller_one_behind_it_still_fits(
     client, connection, fake_storage, monkeypatch
 ):
-    """D5: the walk skips what doesn't fit instead of stopping at it, so
-    one large file at the front of a selection can't discard the smaller
-    ones behind it for no reason other than the order they were picked.
+    """The walk skips what doesn't fit instead of stopping at it, so one
+    large file at the front of a selection can't discard the smaller ones
+    behind it for no reason other than the order they were picked.
     """
     monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_500)
     owner = await log_in(client, connection)
@@ -636,9 +634,9 @@ async def test_a_file_that_does_not_fit_is_skipped_and_a_smaller_one_behind_it_s
 async def test_asking_for_more_than_fits_answers_every_file_exactly_once(
     client, connection, fake_storage, monkeypatch
 ):
-    """D4: the two lists together account for the whole request, and the
-    index on each entry is what lets the client say which file each one
-    is -- the request carries no filename to match them by."""
+    """The two lists together account for the whole request, and the index
+    on each entry is what lets the client say which file each one is -- the
+    request carries no filename to match them by."""
     monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 2_500)
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -671,10 +669,9 @@ async def test_an_account_without_space_denies_with_its_own_reason(
 async def test_an_album_with_room_still_denies_when_the_account_is_full_elsewhere(
     client, connection, fake_storage, monkeypatch
 ):
-    """The account's space is measured over every album its owner has
-    (photo-upload spec), so an empty album is no help once the account
-    itself is full -- and the reason says so, since creating yet another
-    album would not fix it."""
+    """The account's space is measured over every album its owner has, so an
+    empty album is no help once the account itself is full -- and the reason
+    says so, since creating yet another album would not fix it."""
     monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_000)
     owner = await log_in(client, connection)
     crowded = await create_album(connection, owner_id=owner.id, title="Crowded")
@@ -693,9 +690,9 @@ async def test_an_album_with_room_still_denies_when_the_account_is_full_elsewher
 async def test_a_file_that_does_not_fit_the_instance_is_skipped_and_a_smaller_one_fits(
     client, connection, fake_storage, monkeypatch
 ):
-    """D4 in add-instance-quota: the instance is the third check, after
-    the account's, and a smaller file further down the batch can still
-    fit in what the instance has left even after a bigger one didn't."""
+    """The instance is the third check, after the account's, and a smaller
+    file further down the batch can still fit in what the instance has left
+    even after a bigger one didn't."""
     monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 1_500)
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -737,9 +734,8 @@ async def test_the_instance_full_denies_even_with_room_in_the_account(
 async def test_the_account_full_wins_over_the_instance_full(
     client, connection, fake_storage, monkeypatch
 ):
-    """When both are full at once the account's reason is the one that
-    comes back (photo-upload spec, modified by add-instance-quota): it's
-    the only one whoever is asking can act on."""
+    """When both are full at once the account's reason is the one that comes
+    back: it's the only one whoever is asking can act on."""
     monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 500)
     monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 500)
     owner = await log_in(client, connection)
@@ -754,8 +750,8 @@ async def test_the_account_full_wins_over_the_instance_full(
 async def test_an_album_of_someone_else_never_eats_into_this_persons_space(
     client, connection, fake_storage, monkeypatch
 ):
-    """A photo rated in an album someone shared counts against its
-    owner's limit, never the viewer's (account-quota spec)."""
+    """A photo rated in an album someone shared counts against its owner's
+    limit, never the viewer's."""
     monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_000)
     stranger = await create_user(connection)
     foreign = await create_album(connection, owner_id=stranger.id)
@@ -770,17 +766,16 @@ async def test_an_album_of_someone_else_never_eats_into_this_persons_space(
     assert len(response.json()["data"]["granted"]) == 1
 
 
-# --- Final verification (add-instance-quota, tasks 5.1-5.3) ---
+# --- Final verification ---
 
 
 async def test_full_cycle_across_two_accounts_instance_full_then_freed(
     committed_connection, fake_storage, monkeypatch
 ):
-    """Task 5.1: fills the instance from one account, checks that a
-    second, unrelated one is denied with a reason that never points it
-    at its own photos, frees space from the first, and checks the second
-    can upload again -- the space freed anywhere is what re-enables
-    everyone (instance-quota spec)."""
+    """Fills the instance from one account, checks that a second, unrelated
+    one is denied with a reason that never points it at its own photos,
+    frees space from the first, and checks the second can upload again --
+    the space freed anywhere is what re-enables everyone."""
     monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 1_000)
     first_owner = await create_user(committed_connection)
     second_owner = await create_user(committed_connection)
@@ -822,19 +817,17 @@ async def test_full_cycle_across_two_accounts_instance_full_then_freed(
 async def test_the_instance_being_full_does_not_block_anything_else(
     committed_connection, fake_storage, monkeypatch
 ):
-    """Task 5.2: with the instance already over its limit, every other
-    flow -- creating an account, viewing, rating, sharing and deleting --
-    keeps working exactly as it does with room to spare (instance-quota
-    spec).
+    """With the instance already over its limit, every other flow --
+    creating an account, viewing, rating, sharing and deleting -- keeps
+    working exactly as it does with room to spare.
 
     Exercised at the service level, the same way
-    `test_freeing_space_re_enables_granting` above is: `delete_photo`
-    opens its own, separately committed transaction (D6 in
-    add-albums-and-upload), and mixing that with the HTTP `client` --
-    whose own connection never commits until the whole test tears down --
-    deadlocks the two fixtures' teardown against each other the moment
-    anything the client wrote is still locked when `delete_photo` needs
-    the same row.
+    `test_freeing_space_re_enables_granting` above is: `delete_photo` opens
+    its own, separately committed transaction, and mixing that with the HTTP
+    `client` -- whose own connection never commits until the whole test
+    tears down -- deadlocks the two fixtures' teardown against each other
+    the moment anything the client wrote is still locked when `delete_photo`
+    needs the same row.
     """
     monkeypatch.setattr("src.packages.photos.service.photos_settings.instance_max_bytes", 10)
     owner = await create_user(committed_connection)
@@ -886,9 +879,8 @@ async def test_the_instance_being_full_does_not_block_anything_else(
 async def test_reducing_the_account_limit_below_usage_keeps_photos_and_only_blocks_adding(
     client, connection, fake_storage, monkeypatch
 ):
-    """Task 5.3, account scope: the same guarantee `account-quota` already
-    established for this exact case -- lowering the limit below what an
-    account already occupies removes nothing and only blocks adding."""
+    """Account scope: lowering the limit below what an account already
+    occupies removes nothing and only blocks adding."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     await create_photo(
@@ -911,9 +903,9 @@ async def test_reducing_the_account_limit_below_usage_keeps_photos_and_only_bloc
 async def test_reducing_the_instance_limit_below_usage_keeps_photos_and_only_blocks_adding(
     client, connection, fake_storage, monkeypatch
 ):
-    """Task 5.3, instance scope: the same guarantee, one level up -- an
-    instance already over a lowered limit conserves every account's
-    photos and only rejects incorporating more."""
+    """Instance scope: the same guarantee one level up -- an instance already
+    over a lowered limit keeps every account's photos and only rejects
+    adding more."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     await create_photo(connection, album_id=album.id, position=1, declared_size=2_000, size=2_000)

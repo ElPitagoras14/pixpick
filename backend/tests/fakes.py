@@ -1,6 +1,6 @@
-"""In-memory doubles used by the contract suites (D10): each behaves like
-its real counterpart well enough to pass the exact same tests, not a
-call recorder that only checks it was invoked correctly.
+"""In-memory doubles used by the contract suites: each behaves like its real
+counterpart well enough to pass the exact same tests, not a call recorder
+that only checks it was invoked correctly.
 """
 
 from dataclasses import dataclass
@@ -22,10 +22,10 @@ class _StoredObject:
 
 
 class FakeStoragePort:
-    """An in-memory object storage. Objects only exist once `upload` --
-    the test-only stand-in for the direct write a real browser performs
-    against a presigned grant, since the port itself never accepts
-    content (D2) -- succeeds against a still-valid grant.
+    """An in-memory object storage. Objects only exist once `upload` -- the
+    test-only stand-in for the direct write a real browser performs against
+    a presigned grant, since the port itself never accepts content --
+    succeeds against a still-valid grant.
     """
 
     def __init__(self) -> None:
@@ -63,11 +63,11 @@ class FakeStoragePort:
         )
 
     def upload(self, *, target_key: str, size: int, content_type: str) -> bool:
-        """Test-only: what a browser writing directly against a grant
-        would do. Returns whether the write was accepted, exactly the
-        thing a real storage's HTTP response status tells the contract
-        suite. No size check here (D9 in add-cloud-media-adapters): no
-        presigned URL, on any real provider, can bound one either.
+        """Test-only: what a browser writing directly against a grant would
+        do. Returns whether the write was accepted, exactly the thing a real
+        storage's HTTP response status tells the contract suite. No size
+        check here: no presigned URL, on any real provider, can bound one
+        either.
         """
         pending = self._grants.get(target_key)
         if pending is None or pending.expires_at < datetime.now(UTC):

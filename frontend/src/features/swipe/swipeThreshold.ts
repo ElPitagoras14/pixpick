@@ -1,6 +1,6 @@
-// D8: the calibrated starting points -- editing these is a constants
-// change, never a spec change, because the spec only requires that the
-// threshold combine distance with velocity, not how much of each.
+// The calibrated starting points -- editing these is a constants change,
+// never a change of the rule, which only requires that the threshold
+// combine distance with velocity, not how much of each.
 
 /** The distance path: the drag alone qualifies once it crosses this
  * fraction of the card's own width. */
@@ -31,10 +31,9 @@ export interface SwipeAttempt {
 	cardWidth: number;
 }
 
-/** Whether a drag counts as a rating gesture (D8, photo-rating spec):
- * either path accepts, but only when the movement is horizontal, and
- * only past the minimum that separates a gesture from a tap.
- */
+/** Whether a drag counts as a rating gesture: either path accepts, but only
+ * when the movement is horizontal, and only past the minimum that
+ * separates a gesture from a tap. */
 export function isSwipeAccepted(attempt: SwipeAttempt): boolean {
 	const { dx, dy, velocityX, cardWidth } = attempt;
 	const absDx = Math.abs(dx);

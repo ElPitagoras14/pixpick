@@ -16,29 +16,27 @@ class MissingCredentialsError(RuntimeError):
 
 
 class IncompatibleProviderCombinationError(RuntimeError):
-    """Raised when the selected storage and image providers can't be
-    made to work together in this environment (image-delivery spec, D10
-    in harden-local-profile's design): the transformer this project runs
+    """Raised when the selected storage and image providers can't be made to
+    work together in this environment: the transformer this project runs
     itself is wired, at the compose level, only to this same environment's
-    own storage -- parametrizing it to reach an external provider instead
-    is out of scope, left for the cloud profile's own hardening.
+    own storage -- parametrizing it to reach an external provider instead is
+    out of scope, left for the cloud profile's own hardening.
     """
 
 
 def build_image_port() -> ImagePort:
-    """The application's single point of provider selection: the rest of
-    the code depends on `ImagePort` and never branches on which provider
-    is active (image-delivery spec).
+    """The application's single point of provider selection: the rest of the
+    code depends on `ImagePort` and never branches on which provider is
+    active.
     """
     if images_settings.image_provider == "local":
         if storage_settings.storage_provider != "local":
-            # Caught here, not by a fixed address failing to resolve
-            # later (D10): the transformer's own compose wiring
-            # (IMGPROXY_S3_ENDPOINT) always points at this environment's
-            # storage service, regardless of which provider
-            # STORAGE_PROVIDER actually names, so this pair can never
-            # produce a variant no matter how correctly the address
-            # names the active bucket.
+            # Caught here, not by a fixed address failing to resolve later:
+            # the transformer's own compose wiring (IMGPROXY_S3_ENDPOINT)
+            # always points at this environment's storage service,
+            # regardless of which provider STORAGE_PROVIDER actually names,
+            # so this pair can never produce a variant no matter how
+            # correctly the address names the active bucket.
             raise IncompatibleProviderCombinationError(
                 "the 'local' image provider only reaches this environment's own "
                 f"storage; STORAGE_PROVIDER is {storage_settings.storage_provider!r}, "

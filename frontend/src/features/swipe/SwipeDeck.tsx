@@ -11,8 +11,8 @@ import { PhotoViewer } from "@/features/viewer/PhotoViewer";
 interface SwipeDeckProps {
 	albumId: string;
 	initialPhotos: PendingPhoto[];
-	/** Which photo the viewer has open, straight off the address (D1) --
-	 * absent means it is closed. */
+	/** Which photo the viewer has open, straight off the address -- absent
+	 * means it is closed. */
 	openPhotoId?: string;
 	onOpenPhoto: (photoId: string) => void;
 	onShowPhoto: (photoId: string) => void;
@@ -40,13 +40,12 @@ export function SwipeDeck({
 	const activeCardRef = useRef<SwipeCardHandle>(null);
 	const viewerOpen = openPhotoId !== undefined;
 
-	// The keyboard is a full path, not an afterthought (photo-rating spec):
-	// a whole sequence has to be completable without ever touching the
-	// gesture or the pointer.
+	// The keyboard is a full path, not an afterthought: a whole sequence has
+	// to be completable without ever touching the gesture or the pointer.
 	//
-	// Silent while the viewer is open: there the arrows step between
-	// photos, and a key that both moved the viewer and rated the photo
-	// underneath would rate one nobody decided on (photo-viewer spec).
+	// Silent while the viewer is open: there the arrows step between photos,
+	// and a key that both moved the viewer and rated the photo underneath
+	// would rate one nobody decided on.
 	useEffect(() => {
 		if (finished || viewerOpen) return;
 		function onKeyDown(event: KeyboardEvent) {
@@ -150,9 +149,9 @@ export function SwipeDeck({
 				</div>
 			)}
 
-			{/* The set it moves through is what is left of the sequence, in
-			its own order (D3). Closing leaves the deck exactly as it was:
-			nothing here was unmounted, and no decision was emitted. */}
+			{/* The set it moves through is what is left of the sequence, in its own
+			 * order. Closing leaves the deck exactly as it was: nothing here was
+			 * unmounted, and no decision was emitted. */}
 			{openPhotoId && (
 				<PhotoViewer
 					photos={remaining}

@@ -8,25 +8,23 @@ from .port import AuthPort
 
 
 class LocalProviderNotAllowedError(RuntimeError):
-    """Raised when the local adapter is selected outside development
-    (D2): the code it accepts isn't backed by anything a stranger
-    couldn't also send, so it must never be reachable outside a
-    developer's own machine."""
+    """Raised when the local adapter is selected outside development: the
+    code it accepts isn't backed by anything a stranger couldn't also send,
+    so it must never be reachable outside a developer's own machine."""
 
 
 class MissingCredentialsError(RuntimeError):
-    """Raised when the active identity provider requires credentials from
-    an external system and they aren't configured (D6, identity-provider
-    spec). Evaluated only for the provider that's actually selected: a
-    provider that isn't active never blocks startup over credentials
-    nothing is going to use.
+    """Raised when the active identity provider requires credentials from an
+    external system and they aren't configured. Evaluated only for the
+    provider that's actually selected: a provider that isn't active never
+    blocks startup over credentials nothing is going to use.
     """
 
 
 def build_auth_port() -> AuthPort:
-    """The application's single point of provider selection: the rest of
-    the code depends on `AuthPort` and never branches on which provider
-    is active (identity-provider spec).
+    """The application's single point of provider selection: the rest of the
+    code depends on `AuthPort` and never branches on which provider is
+    active.
     """
     if identity_settings.identity_provider == "local":
         if settings.environment != "development":
@@ -48,8 +46,8 @@ def build_auth_port() -> AuthPort:
                 f"the 'google' identity provider requires: {', '.join(missing)}"
             )
         # Our own redirect address, that Google's console needs to have
-        # declared identically (D5): logged where it can be compared by
-        # eye instead of deduced from the code.
+        # declared identically: logged where it can be compared by eye
+        # instead of deduced from the code.
         logger.info(f"Google OAuth redirect URI: {google_redirect_uri()}")
         return GoogleAuthAdapter()
     raise AssertionError(f"unhandled identity provider {identity_settings.identity_provider!r}")

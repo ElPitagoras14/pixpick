@@ -24,7 +24,7 @@ create table sessions (
   updated_at timestamptz not null default now()
 );
 
--- Supports deleting a user's expired sessions on login (D8) without a
+-- Supports deleting a user's expired sessions on login without a
 -- sequential scan of the whole table.
 create index sessions_user_id_idx on sessions (user_id);
 

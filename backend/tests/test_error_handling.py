@@ -1,7 +1,6 @@
-"""Exercises the API-wide response envelope and exception handling
-(api-conventions spec) against a throwaway app: none of this depends on
-a real domain endpoint existing yet, and it must keep working unchanged
-once one does.
+"""Exercises the API-wide response envelope and exception handling against a
+throwaway app: none of this depends on a real domain endpoint existing yet,
+and it must keep working unchanged once one does.
 """
 
 import pytest
@@ -59,11 +58,10 @@ def _build_app() -> FastAPI:
         raise ValidationFailedError("email", "must be a valid address")
 
     # Covered here rather than through a domain endpoint: no flow raises
-    # this today -- add-account-quota turned the one that did, a batch
-    # that doesn't fit, into a partial grant -- and the shape a state
-    # conflict answers with is still the API's own contract
-    # (api-conventions spec), so it keeps being exercised where the rest
-    # of the handlers are.
+    # this today -- the one that did, a batch that doesn't fit, became a
+    # partial grant instead -- and the shape a state conflict
+    # answers with is still the API's own contract, so it keeps being
+    # exercised where the rest of the handlers are.
     @app.get("/conflicted")
     def conflicted():
         raise StateConflictError(
@@ -175,7 +173,7 @@ def test_an_unmatched_route_still_comes_back_in_the_project_shape():
 
 
 def test_insufficient_capacity_responds_503_with_a_retry_after(monkeypatch):
-    """Tasks 4.5, 4.6: distinguishable from both a validation failure
+    """Distinguishable from both a validation failure
     (no field named) and an unforeseen error (no request id, and --
     unlike /boom above, which does call it -- nothing logged as an
     error, since this is an expected, load-shedding response and not a
@@ -196,9 +194,9 @@ def test_insufficient_capacity_responds_503_with_a_retry_after(monkeypatch):
 
 def test_a_state_conflict_is_not_presented_as_a_validation_failure():
     """A state conflict is resolved by changing the resource and retrying
-    the same request, a validation failure by changing the request
-    (api-conventions spec) -- so they answer with different statuses, and
-    the conflict names no field."""
+    the same request, a validation failure by changing the request -- so
+    they answer with different statuses, and the conflict names no field.
+    """
     response = _client().get("/conflicted")
 
     assert response.status_code == 409

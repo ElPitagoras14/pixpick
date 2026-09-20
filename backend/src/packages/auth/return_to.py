@@ -4,10 +4,9 @@ from .config import DEFAULT_RETURN_TO
 
 
 def sanitize_return_to(value: str | None) -> str:
-    """Accepts only a path on this same site (identity-provider spec):
-    an absolute URL to another site (an explicit scheme, or the
-    protocol-relative form a leading double slash produces) is
-    discarded in favor of the default, never followed.
+    """Accepts only a path on this same site: an absolute URL to another
+    site (an explicit scheme, or the protocol-relative form a leading double
+    slash produces) is discarded in favor of the default, never followed.
     """
     if not value:
         return DEFAULT_RETURN_TO

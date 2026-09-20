@@ -6,10 +6,10 @@ from src.exceptions import QueryExecutionError
 
 
 async def test_a_failed_write_in_a_multi_write_operation_leaves_none_committed(connection):
-    """A multi-write operation is atomic (database-access spec): all its
-    writes share one connection and one transaction scope (here, a
-    savepoint standing in for that scope), and a failure partway through
-    leaves none of them committed.
+    """A multi-write operation is atomic: all its writes share one
+    connection and one transaction scope (here, a savepoint standing in for
+    that scope), and a failure partway through leaves none of them
+    committed.
     """
     await write(connection, "create temporary table t_atomic_fail (id int primary key, name text)")
 
@@ -48,8 +48,8 @@ async def test_a_multi_write_operation_without_failure_commits_all_of_it(connect
 
 
 async def test_fetch_one_fails_at_the_boundary_when_a_declared_field_is_missing(connection):
-    """D4: a query that stops returning a field the model declares fails
-    while the model is being constructed, not downstream as a missing key.
+    """A query that stops returning a field the model declares fails while
+    the model is being constructed, not downstream as a missing key.
     """
 
     class RowWithMissingField(BaseModel):
@@ -64,9 +64,9 @@ async def test_fetch_one_fails_at_the_boundary_when_a_declared_field_is_missing(
 
 
 async def test_fetch_val_or_none_is_none_when_nothing_matches(connection):
-    """Added by add-albums-and-upload: unlike `fetch_val`, a query that
-    legitimately matches nothing (an id looked up by a filter that
-    misses) SHALL answer `None` instead of raising."""
+    """Unlike `fetch_val`, a query that legitimately matches nothing (an id
+    looked up by a filter that misses) SHALL answer `None` instead of
+    raising."""
     await write(connection, "create temporary table t_val_or_none (id int primary key)")
 
     assert await fetch_val_or_none(connection, "select id from t_val_or_none where id = 1") is None

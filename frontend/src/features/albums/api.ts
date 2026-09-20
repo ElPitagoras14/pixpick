@@ -15,10 +15,10 @@ export interface AlbumSummary {
 	photoCount: number;
 	coverUrl: string | null;
 	pendingCount: number;
-	// The instant the album stops existing (album-retention spec), as an
-	// ISO timestamp: the backend sends the instant itself, never a
-	// rendered string or a day count, and turning it into either one is
-	// this client's job -- see `remainingTimeLabel`.
+	// The instant the album stops existing, as an ISO timestamp: the backend
+	// sends the instant itself, never a rendered string or a day count, and
+	// turning it into either one is this client's job -- see
+	// `remainingTimeLabel`.
 	expiresAt: string;
 }
 
@@ -33,12 +33,11 @@ export interface Album {
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
-// Turns the backend's raw instant into what someone reads (task 5.2,
-// D6): the day it falls into from *now*, not a rounded duration --
-// something confirmed a minute ago reads "today", not "in 0 days".
-// Shown to the owner and to anyone with a shared link alike (task
-// 5.2): both need to know how long the album -- and their chance to
-// finish rating it -- has left.
+// Turns the backend's raw instant into what someone reads: the day it falls
+// into from *now*, not a rounded duration -- something confirmed a minute
+// ago reads "today", not "in 0 days". Shown to the owner and to anyone with
+// a shared link alike: both need to know how long the album -- and their
+// chance to finish rating it -- has left.
 export function remainingTimeLabel(expiresAt: string): string {
 	const daysRemaining = Math.ceil(
 		(new Date(expiresAt).getTime() - Date.now()) / DAY_IN_MS,
@@ -58,9 +57,9 @@ async function fetchAlbum(albumId: string): Promise<Album> {
 	return response.data.data as Album;
 }
 
-// The one place each of these queries is defined (D9): the list route,
-// the album layout, and the grid all consume these, and none keeps a
-// second copy of the same data.
+// The one place each of these queries is defined: the list route, the album
+// layout, and the grid all consume these, and none keeps a second copy of
+// the same data.
 export function albumsQueryOptions() {
 	return queryOptions({
 		queryKey: ["albums"] as const,
@@ -80,10 +79,9 @@ export interface AlbumInput {
 	description?: string;
 }
 
-// What create/rename return (album-management spec): the album's own
-// descriptive fields, never `isOwner`/`pendingCount` -- those depend on
-// who's asking and what they've rated, which only the detail endpoint
-// (`fetchAlbum`) resolves.
+// What create/rename return: the album's own descriptive fields, never
+// `isOwner`/`pendingCount` -- those depend on who's asking and what they've
+// rated, which only the detail endpoint (`fetchAlbum`) resolves.
 export interface AlbumEditResult {
 	id: string;
 	title: string;
@@ -163,9 +161,8 @@ export function useDeleteAlbum() {
 			queryClient.invalidateQueries({
 				queryKey: albumsQueryOptions().queryKey,
 			});
-			// An album takes its photos with it (album-management spec), so
-			// what it occupied stops counting against its owner's limit
-			// (account-quota spec).
+			// An album takes its photos with it, so what it occupied stops counting
+			// against its owner's limit.
 			queryClient.invalidateQueries({
 				queryKey: accountUsageQueryOptions().queryKey,
 			});

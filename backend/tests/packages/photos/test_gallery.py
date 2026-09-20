@@ -14,9 +14,9 @@ from tests.factories import (
 
 
 async def test_the_unrated_filter_is_the_exact_set_the_sequence_returns(connection):
-    """Task 1.2, D1: comparing the two results, not just their counts --
-    the gallery's "unrated" filter and the rating sequence are the same
-    query with the same filter, so they can never diverge.
+    """Comparing the two results, not just their counts -- the gallery's
+    "unrated" filter and the rating sequence are the same query with the
+    same filter, so they can never diverge.
     """
     user = await create_user(connection)
     album = await create_album(connection, owner_id=user.id)
@@ -36,8 +36,7 @@ async def test_the_unrated_filter_is_the_exact_set_the_sequence_returns(connecti
 
 
 async def test_unrated_and_rejected_are_distinguishable(connection):
-    """Task 1.6: neither state is represented as the absence of the
-    other."""
+    """Neither state is represented as the absence of the other."""
     user = await create_user(connection)
     album = await create_album(connection, owner_id=user.id)
     rejected = await create_photo(connection, album_id=album.id, position=1)
@@ -54,8 +53,7 @@ async def test_unrated_and_rejected_are_distinguishable(connection):
 
 
 async def test_the_gallery_always_returns_the_four_counts(client, connection):
-    """Task 1.3, D2: whatever filter was requested, the response carries
-    all four counts."""
+    """Whatever filter was requested, the response carries all four counts."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     approved = await create_photo(connection, album_id=album.id, position=1)
@@ -70,8 +68,8 @@ async def test_the_gallery_always_returns_the_four_counts(client, connection):
 
 
 async def test_the_three_partial_filters_partition_the_total(client, connection):
-    """Task 1.4: the sum of approved, rejected and unrated equals the
-    total, and no photo appears in more than one partial filter."""
+    """The sum of approved, rejected and unrated equals the total, and no
+    photo appears in more than one partial filter."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     approved = await create_photo(connection, album_id=album.id, position=1)
@@ -119,7 +117,7 @@ async def test_two_members_who_rated_differently_get_different_filters(client, c
     response = client.get(f"/api/albums/{album.id}/photos/gallery", params={"filter": "approved"})
 
     # `member` never rated this photo, so their own "approved" filter is
-    # empty even though the owner approved it (rating-gallery spec).
+    # empty even though the owner approved it.
     assert response.json()["data"]["photos"] == []
 
 
@@ -141,8 +139,7 @@ async def test_gallery_photos_show_the_viewers_own_rating(client, connection):
 
 
 async def test_photos_appear_in_album_order_for_every_filter(client, connection):
-    """Task 3.7 (backend side): no filter reorders by rating or by when
-    it was cast."""
+    """No filter reorders by rating, or by when the rating was cast."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     third = await create_photo(connection, album_id=album.id, position=3)
@@ -157,8 +154,8 @@ async def test_photos_appear_in_album_order_for_every_filter(client, connection)
 
 
 async def test_the_gallery_does_not_expose_aggregated_counts(client, connection):
-    """Task 2.6: not even the owner sees cross-viewer counts here -- that
-    is `album-stats`'s own, separate resource."""
+    """Not even the owner sees cross-viewer counts here -- those are the
+    album's stats, a separate resource."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     photo = await create_photo(connection, album_id=album.id, position=1)
@@ -179,9 +176,9 @@ async def test_the_gallery_does_not_expose_aggregated_counts(client, connection)
 
 
 async def test_an_unknown_filter_is_rejected_rather_than_silently_defaulted(client, connection):
-    """The backend endpoint itself validates strictly (D9): the leniency
-    that turns an unrecognized filter into the default lives in the
-    frontend route, not here."""
+    """The backend endpoint itself validates strictly: the leniency that
+    turns an unrecognized filter into the default lives in the frontend
+    route, not here."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
 
@@ -191,9 +188,9 @@ async def test_an_unknown_filter_is_rejected_rather_than_silently_defaulted(clie
 
 
 async def test_the_gallery_carries_the_viewer_variant_alongside_the_thumbnail(client, connection):
-    """Task 1.1, 1.3 (photo-viewer spec): the grid keeps the thumbnail it
-    already had -- the largest variant is added next to it, never in its
-    place -- and neither address is the original."""
+    """The grid keeps the thumbnail it already had -- the largest variant is
+    added next to it, never in its place -- and neither address is the
+    original."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     photo = await create_photo(connection, album_id=album.id, position=1)
@@ -210,10 +207,10 @@ async def test_the_gallery_carries_the_viewer_variant_alongside_the_thumbnail(cl
 
 
 async def test_the_rating_sequence_carries_the_viewer_variant_too(client, connection):
-    """The viewer opens from the rating card as well, and what it shows
-    is the same largest variant wherever it was opened from (photo-viewer
-    spec) -- so the card's own `rating` variant stays untouched and the
-    viewer's is carried next to it."""
+    """The viewer opens from the rating card as well, and what it shows is
+    the same largest variant wherever it was opened from -- so the card's
+    own `rating` variant stays untouched and the viewer's is carried next to
+    it."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     photo = await create_photo(connection, album_id=album.id, position=1)

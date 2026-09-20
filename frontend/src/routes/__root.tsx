@@ -14,9 +14,9 @@ interface RouterContext {
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-	// Resolved once, here, and threaded down through context (D9): every
-	// route below reads `context.session` instead of running its own
-	// query for the same thing.
+	// Resolved once, here, and threaded down through context: every route
+	// below reads `context.session` instead of running its own query for the
+	// same thing.
 	beforeLoad: async ({ context }) => {
 		const session = await context.queryClient.ensureQueryData(
 			sessionQueryOptions(),

@@ -1,4 +1,4 @@
-// Decorative only (design.md): a plain CSS @keyframes loop, not the real
+// Decorative only: a plain CSS @keyframes loop, not the real
 // gesture engine (`@use-gesture` + `motion/mini` in features/swipe). No
 // pointer listener is attached anywhere in this tree, so nothing here can
 // be mistaken for a control that responds to a drag.

@@ -6,14 +6,13 @@ from .schemas import AccountUsage, AlbumUsage, AlbumUsageRow, InstanceUsage, Pho
 
 
 class InstanceUsageResponse(ApiModel):
-    """The instance's own resource (instance-quota spec, D3): the
-    percentage occupied, rounded, and nothing more. Never the total or
-    the limit in bytes -- that's the installation's real capacity, and
-    publishing it to any signed-in session describes whoever hosts it
-    for no benefit to whoever is asking, since the percentage already
-    says everything they can act on. Never a breakdown by account
-    either, since what any one account occupies is that account's own
-    (account-quota spec) and not this resource's to expose.
+    """The instance's own resource: the percentage occupied, rounded, and
+    nothing more. Never the total or the limit in bytes -- that's the
+    installation's real capacity, and publishing it to any signed-in session
+    describes whoever hosts it for no benefit to whoever is asking, since
+    the percentage already says everything they can act on. Never a
+    breakdown by account either, since what any one account occupies is that
+    account's own and not this resource's to expose.
     """
 
     used_percent: int
@@ -47,10 +46,9 @@ class PhotoUsageEntryResponse(ApiModel):
 
 
 class AccountUsageResponse(ApiModel):
-    """The account's own resource (account-quota spec, D3): the total,
-    the limit, and the breakdown by album. How much is left is the
-    difference between the first two, which is why both travel together
-    and neither is sent alone.
+    """The account's own resource: the total, the limit, and the breakdown
+    by album. How much is left is the difference between the first two,
+    which is why both travel together and neither is sent alone.
     """
 
     used_bytes: int
@@ -67,11 +65,11 @@ class AccountUsageResponse(ApiModel):
 
 
 class AlbumUsageResponse(ApiModel):
-    """The album's own resource (account-quota spec, D3): what it
-    occupies and what each of its photos contributes. A resource of its
-    own rather than fields added to the album's detail or its gallery,
-    which a person the album was shared with can read too -- the rule of
-    who sees this is written once, at the door, instead of once per field.
+    """The album's own resource: what it occupies and what each of its
+    photos contributes. A resource of its own rather than fields added to
+    the album's detail or its gallery, which a person the album was shared
+    with can read too -- the rule of who sees this is written once, at the
+    door, instead of once per field.
     """
 
     used_bytes: int

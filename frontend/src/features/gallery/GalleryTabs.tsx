@@ -24,12 +24,11 @@ interface GalleryTabsProps {
 	counts: GalleryCounts;
 }
 
-/** The gallery's four filters (rating-gallery spec), each carrying its
- * own count straight from the response that already came with the grid
- * (D2, task 3.2) -- switching tabs never fires a request just to learn
- * how many photos are in it. The filter lives in the address (D9), so
- * this is a set of links, not buttons that call `setState`.
- */
+/** The gallery's four filters, each carrying its own count straight from
+ * the response that already came with the grid -- switching tabs never
+ * fires a request just to learn how many photos are in it. The filter
+ * lives in the address, so this is a set of links, not buttons that call
+ * `setState`. */
 export function GalleryTabs({ albumId, active, counts }: GalleryTabsProps) {
 	return (
 		<div className="flex gap-1 overflow-x-auto">

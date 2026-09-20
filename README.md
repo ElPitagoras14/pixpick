@@ -1,4 +1,4 @@
-# pixpick
+# Pixpick
 
 Share a photo album with other people. They rate each photo with a swipe. You see what they liked.
 
@@ -162,14 +162,14 @@ docker run --rm --network pixpick_pixpick --entrypoint sh \
 
 Change the user and the password if you changed them in `.env`.
 
-An upload that never finishes, or an album whose plazo has run out, leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows either one, and the `reconciler` service discards both on its own, every five minutes. You can still run it by hand, for instance right after testing an expiry instead of waiting out the interval:
+An upload that never finishes, or an album whose retention has run out, leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows either one, and the `reconciler` service discards both on its own, every five minutes. Run it by hand when you do not want to wait out the interval, such as right after testing an expiry:
 
 ```bash
 cd backend
 uv run python -m src.maintenance.reconcile
 ```
 
-Running it discards both: abandoned uploads and expired albums, with their photos and objects. This matters more than it looks: `storage`, `postgres` and the image cache all share one disk in this profile, so what this discards is what keeps that disk from filling up and taking the whole instance down with it, not just an unbilled difference at a storage provider.
+It discards abandoned uploads and expired albums, with their photos and objects. `storage`, `postgres` and the image cache share one disk here, so leaving it to run is what keeps that disk from filling up.
 
 ## Run the tests
 
@@ -225,25 +225,27 @@ pixpick/
 | `migrate` | Applies the database migrations once, then exits | No |
 | `reconciler` | Discards abandoned uploads and expired albums on a schedule | No |
 
-The browser only talks to `nginx`. `storage` used to be the one exception, reached straight from the browser on its own port; it no longer is, now that nginx sits in front of it too (see "The storage's own address" below). `MINIO_PORT` still publishes `storage`'s own port, but only for native mode and the debugging commands further down this page -- the browser itself never uses it in containers mode.
+The browser only talks to `nginx`, including when it uploads a photo (see "The storage's own address" below). `MINIO_PORT` publishes `storage`'s own port for native mode and for the debugging commands further up this page; the browser never uses it in containers mode.
 
 Both files declare all eight. `storage` and `transformer` start even when `STORAGE_PROVIDER` and `IMAGE_PROVIDER` name a cloud provider. Those two variables decide who the app talks to, not which containers run.
 
 ### The storage's own address
 
-The browser writes photos straight to `storage`, bypassing the backend entirely -- but even that write goes through `nginx`, not straight to the `storage` container, so that nginx can cap how much a single upload can write (`client_max_body_size`, derived from the backend's own per-file maximum) before it ever reaches the storage. `nginx` tells the two apart by hostname, matching the `Host` header the browser sent against `STORAGE_PUBLIC_URL`: a request for the app's own hostname goes to the backend or the frontend, and a request for `STORAGE_PUBLIC_URL`'s hostname goes to `storage`.
+The browser writes photos to `storage` without going through the backend, but that write still goes through `nginx`, which caps how much one upload can write before it reaches the storage. `nginx` tells an upload from a request for the app by hostname: it matches the `Host` header against `STORAGE_PUBLIC_URL`, and everything else goes to the backend or the frontend.
 
-That means `STORAGE_PUBLIC_URL` needs a real hostname to match against -- a bare IP address is not enough on its own, because nginx would have no way to tell "this is for the app" from "this is for storage" if both arrived under the same address. Three ways to get one, depending on how you're reaching the instance:
+So `STORAGE_PUBLIC_URL` needs a hostname, not a bare IP address -- with both under the same address there is nothing for nginx to match on. Three ways to get one:
 
-- **A real domain.** If you're behind a platform proxy (Dokploy or otherwise) that already terminates TLS for `PUBLIC_URL`'s own domain, give it a second domain for storage -- a subdomain such as `storage.yourdomain.com` is the usual pattern -- pointed at the same `nginx` service. Set `STORAGE_PUBLIC_URL` to that, with `https://`.
-- **`storage.localhost`, for local development.** This is `.env.example`'s own default. Every major browser resolves anything ending in `.localhost` straight to your own machine on its own, with no `/etc/hosts` entry and no DNS server needed.
-- **An sslip.io/nip.io hostname, for a private or VPN address with no domain of its own.** These free services resolve a hostname that encodes an IP address to that same address, so nothing but the lookup itself leaves your network -- the app's own traffic still goes directly over your LAN or VPN, exactly as it would with a real domain. For a machine at `192.168.1.50`, set `STORAGE_PUBLIC_URL=http://storage.192-168-1-50.sslip.io:8080` (replace the dots in the IP with dashes; keep `:8080`, or whatever `NGINX_PORT` you're using, at the end). This is the way to reach the instance by a bare private address without editing a hosts file on every device that opens it.
+- **A real domain.** Behind a platform proxy (Dokploy or otherwise) that already terminates TLS for `PUBLIC_URL`'s domain, give it a second domain for storage -- `storage.yourdomain.com` is the usual pattern -- pointed at the same `nginx` service. Set `STORAGE_PUBLIC_URL` to that, with `https://`.
+- **`storage.localhost`, for local development.** The default in `.env.example`. Every major browser resolves anything ending in `.localhost` to your own machine, with no `/etc/hosts` entry and no DNS server.
+- **An sslip.io or nip.io hostname, for a private or VPN address with no domain.** These resolve a hostname that encodes an IP address to that address, so only the lookup leaves your network. For a machine at `192.168.1.50`, set `STORAGE_PUBLIC_URL=http://storage.192-168-1-50.sslip.io:8080` -- dots in the IP become dashes, and the port is whatever `NGINX_PORT` you use.
 
-Whichever you pick, it's the only value that changes -- `nginx`'s own configuration and the rest of `.env` stay exactly the same.
+Whichever you pick, it is the only value that changes. `nginx`'s configuration and the rest of `.env` stay as they are.
 
 ### The rate limit and your CDN
 
-`nginx` limits how many requests it accepts from the same address per minute (600 by default, and a stricter 30 for asking to upload a photo). Both are fixed in `nginx/nginx.conf.template`, not in `.env`. If you put a CDN in front of the instance, configure a matching rate limit rule there too: `nginx`'s own counters live in memory and reset every time it restarts, while a CDN's own layer sits in front of that restart and does not. Match the CDN's rule to whichever of the two is stricter for the path it applies to, so a client that would be rejected here is rejected there first instead, before the request ever reaches your instance.
+`nginx` accepts 600 requests a minute from the same address, and 30 for asking to upload a photo. Both are fixed in `nginx/nginx.conf.template`, not in `.env`.
+
+Put a CDN in front of the instance and you want a matching rule there too, at whichever of the two is stricter for the path: `nginx`'s counters live in memory and reset on every restart, so the CDN's rule is what holds across one.
 
 ### The backend (`backend/`)
 

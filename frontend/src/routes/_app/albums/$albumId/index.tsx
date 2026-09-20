@@ -32,13 +32,13 @@ import {
 } from "@/features/viewer/searchParam";
 import { useViewerNavigation } from "@/features/viewer/useViewerNavigation";
 
-// A closed set of four values with a default (D9, rating-gallery spec):
-// `.catch` is what turns an unrecognized filter into "all" instead of a
-// validation error, so an old or hand-edited link never breaks.
+// A closed set of four values with a default: `.catch` is what turns an
+// unrecognized filter into "all" instead of a validation error, so an old
+// or hand-edited link never breaks.
 //
-// The open photo joins it as a second param on this same route (D1, D2):
-// a param rather than a child route, so the grid below stays mounted and
-// closing is just this address without it.
+// The open photo joins it as a second param on this same route: a param
+// rather than a child route, so the grid below stays mounted and closing is
+// just this address without it.
 const gallerySearchSchema = z.object({
 	filter: z.enum(GALLERY_FILTERS).catch("all"),
 	...viewerSearchSchema,
@@ -66,17 +66,17 @@ function AlbumGallery() {
 	const { filter, [VIEWER_SEARCH_PARAM]: openPhotoId } = Route.useSearch();
 	const navigate = useNavigate();
 	const { openPhoto, showPhoto, closeViewer } = useViewerNavigation();
-	// Already loaded by the layout's own loader (D11): reading it here
-	// again is a cache hit, never a second request.
+	// Already loaded by the layout's own loader: reading it here again is a
+	// cache hit, never a second request.
 	const { data: album } = useSuspenseQuery(albumQueryOptions(albumId));
 	const { data: gallery } = useSuspenseQuery(
 		galleryQueryOptions(albumId, filter),
 	);
-	// Requested alongside the gallery and never awaited before it (D5):
-	// the grid renders as soon as the gallery arrives, and the owner's
-	// counts appear on top of it once the stats arrive separately. Only
-	// mounted for the owner -- for anyone else this resource is forbidden
-	// (album-stats spec), so there is nothing to ask for.
+	// Requested alongside the gallery and never awaited before it: the grid
+	// renders as soon as the gallery arrives, and the owner's counts appear on
+	// top of it once the stats arrive separately. Only mounted for the owner
+	// -- for anyone else this resource is forbidden, so there is nothing to
+	// ask for.
 	const { data: stats } = useQuery({
 		...albumStatsQueryOptions(albumId),
 		enabled: album.isOwner,
@@ -84,10 +84,10 @@ function AlbumGallery() {
 	const statsByPhotoId = new Map(
 		stats?.photos.map((photo) => [photo.photoId, photo]) ?? [],
 	);
-	// Its own resource, asked for the same way and for the same reason as
-	// the stats above (D3): what a photo occupies is the owner's business,
-	// so it never travels in the gallery -- which someone with a shared
-	// link reads too -- and never blocks the grid from being drawn.
+	// Its own resource, asked for the same way and for the same reason as the
+	// stats above: what a photo occupies is the owner's business, so it never
+	// travels in the gallery -- which someone with a shared link reads too --
+	// and never blocks the grid from being drawn.
 	const { data: usage } = useQuery({
 		...albumUsageQueryOptions(albumId),
 		enabled: album.isOwner,
@@ -182,9 +182,9 @@ function AlbumGallery() {
 				onOpenChange={(open) => !open && setPhotoPendingDelete(null)}
 			/>
 
-			{/* The set it moves through is this screen's own filtered list,
-			in the order it is being shown (D3): the viewer never learns
-			what a filter is, it just walks what it was handed. */}
+			{/* The set it moves through is this screen's own filtered list, in the
+			 * order it is being shown: the viewer never learns what a filter is, it
+			 * just walks what it was handed. */}
 			{openPhotoId && (
 				<PhotoViewer
 					photos={gallery.photos}

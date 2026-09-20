@@ -1,6 +1,5 @@
-"""The retention period comes from the environment, not from the code
-(album-retention spec): changing it SHALL NOT require editing anything
-here.
+"""The retention period comes from the environment, not from the code:
+changing it SHALL NOT require editing anything here.
 """
 
 from src.packages.albums.config import AlbumsSettings

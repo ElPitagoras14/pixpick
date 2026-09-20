@@ -1,7 +1,7 @@
-"""The object-storage contract (D9): every test here runs once against
-`FakeStoragePort` and once against `MinioStorageAdapter` talking to the
-real MinIO the local environment provides, through the exact same body.
-A provider that fails any of these isn't acceptable (object-storage spec).
+"""The object storage contract: every test here runs once against
+`FakeStoragePort` and once against `MinioStorageAdapter` talking to the real
+MinIO the local environment provides, through the exact same body. A
+provider that fails any of these isn't acceptable.
 """
 
 import asyncio
@@ -107,10 +107,9 @@ async def test_several_objects_are_deleted_in_one_operation(storage_harness):
 async def test_deleting_more_than_the_protocol_batch_limit_still_deletes_all_of_it(
     storage_harness,
 ):
-    """Task 5.1: the caller sends one call naming more objects than a
-    single DeleteObjects request can carry (object-storage spec, D7) --
-    it's the port's own job to split it, not this test's setup and not
-    whoever calls it in production."""
+    """The caller sends one call naming more objects than a single
+    DeleteObjects request can carry -- it's the port's own job to split it,
+    not this test's setup and not whoever calls it in production."""
     from src.storage.port import DELETE_BATCH_LIMIT
 
     over_the_limit = DELETE_BATCH_LIMIT + 5

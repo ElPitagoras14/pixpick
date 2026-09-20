@@ -19,8 +19,8 @@ def _client() -> TestClient:
 
 def _fake_id_token(payload: dict) -> str:
     """A JWT-shaped string carrying `payload`, with no real signature --
-    this project never checks one (D1), so tests don't need to produce
-    one either.
+    this project never checks one, so tests don't need to produce one
+    either.
     """
 
     def _segment(data: bytes) -> str:
@@ -159,11 +159,9 @@ def test_a_provider_error_other_than_a_rejection_is_a_failure():
 
 
 def test_neither_a_rejection_nor_a_failure_reaches_the_shared_login_service(monkeypatch):
-    """Neither outcome calls the code that would create a user or a
-    session (identity-provider spec, established by
-    `add-auth-port-and-local-provider`): both return, or raise, before the
-    shared `/api/auth/callback` -- the only caller of that service -- is
-    ever reached.
+    """Neither outcome calls the code that would create a user or a session:
+    both return, or raise, before the shared `/api/auth/callback` -- the
+    only caller of that service -- is ever reached.
     """
     calls = []
     monkeypatch.setattr("src.packages.auth.service.complete_login", lambda *a, **k: calls.append(1))

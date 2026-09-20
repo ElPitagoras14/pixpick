@@ -47,9 +47,9 @@ async def test_end_session_makes_the_token_stop_authenticating(connection):
 
 
 async def test_ending_one_session_leaves_the_users_other_sessions_active(connection):
-    """D8's cleanup only removes *expired* sessions on login -- it must
-    not be confused with what a logout does, which only ever removes
-    the one session it names."""
+    """The cleanup on login only removes *expired* sessions -- it must not
+    be confused with what a logout does, which only ever removes the one
+    session it names."""
     identity = ExternalIdentity(provider="local", provider_user_id="5", email="e@example.com")
     user, first_token = await service.complete_login(connection, identity)
     # A second sign-in for the same identity opens a second, independent

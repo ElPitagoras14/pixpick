@@ -1,6 +1,6 @@
-"""D1: every read of photos other than the upload flow's own writes goes
-through `available_photos`, never `photos` directly. These tests are the
-guarantee that querying the view needs no extra condition (task 1.2).
+"""Every read of photos other than the upload flow's own writes goes through
+`available_photos`, never `photos` directly. These tests are the guarantee
+that querying the view needs no extra condition.
 """
 
 from sqlalchemy import text
