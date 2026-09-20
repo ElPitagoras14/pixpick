@@ -88,9 +88,6 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      STATEMENT_TIMEOUT_MS: ${STATEMENT_TIMEOUT_MS}
-      LOCK_TIMEOUT_MS: ${LOCK_TIMEOUT_MS}
-      IDLE_IN_TRANSACTION_TIMEOUT_MS: ${IDLE_IN_TRANSACTION_TIMEOUT_MS}
       IDENTITY_PROVIDER: ${IDENTITY_PROVIDER}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
@@ -121,8 +118,6 @@ services:
       ACCOUNT_MAX_BYTES: ${ACCOUNT_MAX_BYTES}
       INSTANCE_MAX_BYTES: ${INSTANCE_MAX_BYTES}
       ALBUM_RETENTION_DAYS: ${ALBUM_RETENTION_DAYS}
-      ALBUM_TITLE_MAX_LENGTH: ${ALBUM_TITLE_MAX_LENGTH}
-      ALBUM_DESCRIPTION_MAX_LENGTH: ${ALBUM_DESCRIPTION_MAX_LENGTH}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -151,11 +146,13 @@ services:
     build:
       context: ./backend
     entrypoint: ["sh", "-c"]
+    # 300 seconds -- fixed, not configurable: no environment has a
+    # legitimate reason to run this cleanup at a different pace.
     command:
       - |
         while true; do
           python -m src.maintenance.reconcile
-          sleep "$RECONCILE_INTERVAL_SECONDS"
+          sleep 300
         done
     environment:
       # Only what src/maintenance/reconcile.py's own import graph actually
@@ -163,9 +160,6 @@ services:
       # credentials, and album-retention's own setting -- never identity,
       # images, or the quota/length settings this command never reads.
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      STATEMENT_TIMEOUT_MS: ${STATEMENT_TIMEOUT_MS}
-      LOCK_TIMEOUT_MS: ${LOCK_TIMEOUT_MS}
-      IDLE_IN_TRANSACTION_TIMEOUT_MS: ${IDLE_IN_TRANSACTION_TIMEOUT_MS}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER}
       MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
       MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
@@ -177,8 +171,6 @@ services:
       R2_BUCKET: ${R2_BUCKET}
       R2_ENDPOINT: ${R2_ENDPOINT}
       ALBUM_RETENTION_DAYS: ${ALBUM_RETENTION_DAYS}
-      # How often the loop above re-runs the command, in seconds (D6, D11).
-      RECONCILE_INTERVAL_SECONDS: ${RECONCILE_INTERVAL_SECONDS}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -269,16 +261,18 @@ services:
       # delivery spec, task 6.2 in harden-local-profile): reaching it is
       # reaching a resource with real CPU and memory cost behind it, and
       # a signed address is valid for any object in the storage, not only
-      # the ones this project's own catalog ever requests.
-      IMGPROXY_MAX_SRC_RESOLUTION: ${TRANSFORMER_MAX_SRC_RESOLUTION}
-      IMGPROXY_MAX_SRC_FILE_SIZE: ${TRANSFORMER_MAX_SRC_FILE_SIZE}
+      # the ones this project's own catalog ever requests. Fixed, not
+      # configurable: no environment has a legitimate reason for a
+      # different ceiling here.
+      IMGPROXY_MAX_SRC_RESOLUTION: "40"
+      IMGPROXY_MAX_SRC_FILE_SIZE: "20971520"
       # 2048 -- the catalog's own largest variant (backend/src/images/
       # catalog.py, Variant.VIEWER): a hard ceiling on top of it, not a
       # duplicate of it, so a future catalog entry that forgets to stay
       # under it fails loudly instead of quietly serving something bigger.
-      IMGPROXY_MAX_RESULT_DIMENSION: ${TRANSFORMER_MAX_RESULT_DIMENSION}
-      IMGPROXY_WORKERS_NUMBER: ${TRANSFORMER_WORKERS}
-      IMGPROXY_DOWNLOAD_TIMEOUT: ${TRANSFORMER_DOWNLOAD_TIMEOUT_SECONDS}
+      IMGPROXY_MAX_RESULT_DIMENSION: "2048"
+      IMGPROXY_WORKERS_NUMBER: "2"
+      IMGPROXY_DOWNLOAD_TIMEOUT: "10"
       # Read access limited to the albums prefix (object-storage spec):
       # a signature covers only the object identity and the content
       # type, never which prefix it lives under, so this is the one
@@ -313,16 +307,6 @@ services:
       # MINIO_BROWSER_ENDPOINT above, so the two always name the same
       # hostname.
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
-      # Rate and connection limiting by client address (request-
-      # throttling spec, D3, D11 in harden-local-profile's design):
-      # substituted into nginx's own config at start (nginx/entrypoint.sh).
-      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED}
-      API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE}
-      API_RATE_LIMIT_BURST: ${API_RATE_LIMIT_BURST}
-      GRANTS_RATE_LIMIT_PER_MINUTE: ${GRANTS_RATE_LIMIT_PER_MINUTE}
-      GRANTS_RATE_LIMIT_BURST: ${GRANTS_RATE_LIMIT_BURST}
-      API_MAX_CONNECTIONS_PER_IP: ${API_MAX_CONNECTIONS_PER_IP}
-      RATE_LIMIT_RETRY_AFTER_SECONDS: ${RATE_LIMIT_RETRY_AFTER_SECONDS}
     volumes:
       # The images cache (D12 in add-media-ports-and-local-adapters): a
       # volume, not an anonymous layer, so it survives a container

@@ -207,9 +207,10 @@ def test_the_viewer_variant_never_enlarges_a_smaller_original(uploaded_object):
 
 @pytest.fixture
 def uploaded_oversized_original() -> Iterator[str]:
-    """A real original above TRANSFORMER_MAX_SRC_RESOLUTION (.env.example's
-    default of 40 megapixels): solid color, so the compressed file itself
-    stays small even at this pixel count (task 6.2)."""
+    """A real original above the transformer's own fixed ceiling
+    (IMGPROXY_MAX_SRC_RESOLUTION in compose.yaml/compose.dev.yaml, 40
+    megapixels): solid color, so the compressed file itself stays small
+    even at this pixel count (task 6.2)."""
     key = f"albums/contract-test/{uuid.uuid4()}"
     client = _direct_client()
     client.put_object(

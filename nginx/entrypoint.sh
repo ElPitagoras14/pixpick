@@ -7,9 +7,7 @@ set -eu
 # this, since a missing variable just becomes an empty string. The list
 # is explicit here, not derived from the template, so adding a
 # placeholder without declaring it required is visible in review.
-required_vars="STORAGE_PUBLIC_URL API_RATE_LIMIT_PER_MINUTE API_RATE_LIMIT_BURST
-GRANTS_RATE_LIMIT_PER_MINUTE GRANTS_RATE_LIMIT_BURST API_MAX_CONNECTIONS_PER_IP
-RATE_LIMIT_RETRY_AFTER_SECONDS RATE_LIMIT_ENABLED"
+required_vars="STORAGE_PUBLIC_URL"
 
 for var in $required_vars; do
 	eval "value=\${${var}:-}"
@@ -31,28 +29,12 @@ if [ -z "$STORAGE_PUBLIC_HOSTNAME" ]; then
 fi
 export STORAGE_PUBLIC_HOSTNAME
 
-# The rate and connection limits can be turned off by configuration
-# (request-throttling spec: development and the test suite need to
-# exercise the system at a pace a limit sized for the internet would cut
-# off). nginx has no directive that means "this zone doesn't limit
-# anything", so this raises the substituted values themselves to a
-# ceiling nothing a real client does ever reaches, instead of the zones
-# or the `limit_req`/`limit_conn` directives being conditionally written
-# into the config at all.
-if [ "$RATE_LIMIT_ENABLED" = "false" ]; then
-	API_RATE_LIMIT_PER_MINUTE=1000000
-	API_RATE_LIMIT_BURST=1000000
-	GRANTS_RATE_LIMIT_PER_MINUTE=1000000
-	GRANTS_RATE_LIMIT_BURST=1000000
-	API_MAX_CONNECTIONS_PER_IP=1000000
-	export API_RATE_LIMIT_PER_MINUTE API_RATE_LIMIT_BURST GRANTS_RATE_LIMIT_PER_MINUTE
-	export GRANTS_RATE_LIMIT_BURST API_MAX_CONNECTIONS_PER_IP
-fi
-
 # Phase 2: substitute and start nginx. Restricting envsubst's variable list
 # keeps it from touching the file's own `$name`-shaped nginx variables
-# (`$remote_addr`, `$http_x_forwarded_for`, and the rest).
-envsubst '${STORAGE_PUBLIC_HOSTNAME} ${API_RATE_LIMIT_PER_MINUTE} ${API_RATE_LIMIT_BURST} ${GRANTS_RATE_LIMIT_PER_MINUTE} ${GRANTS_RATE_LIMIT_BURST} ${API_MAX_CONNECTIONS_PER_IP} ${RATE_LIMIT_RETRY_AFTER_SECONDS}' \
+# (`$remote_addr`, `$http_x_forwarded_for`, and the rest). The rate and
+# connection limits are fixed in the template itself (simplify-rate-
+# limit-config), so this is the only placeholder left to substitute.
+envsubst '${STORAGE_PUBLIC_HOSTNAME}' \
 	< /etc/pixpick/nginx.conf.template \
 	> /etc/nginx/conf.d/default.conf
 

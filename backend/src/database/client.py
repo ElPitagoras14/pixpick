@@ -5,7 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_en
 
 from src.exceptions import DatabaseUnavailableError, QueryExecutionError
 
-from .config import database_settings
+from .config import (
+    IDLE_IN_TRANSACTION_TIMEOUT_MS,
+    LOCK_TIMEOUT_MS,
+    STATEMENT_TIMEOUT_MS,
+    database_settings,
+)
 
 # Explicit pool limits (D2, D11): five permanent connections and fifteen of
 # overflow, a ceiling of twenty per process. Not left to the access layer's
@@ -36,10 +41,10 @@ engine: AsyncEngine = create_async_engine(
         # statement runs, no lock is waited on, and no transaction sits
         # idle, past what `database.config` declares.
         "options": (
-            f"-c statement_timeout={database_settings.statement_timeout_ms} "
-            f"-c lock_timeout={database_settings.lock_timeout_ms} "
+            f"-c statement_timeout={STATEMENT_TIMEOUT_MS} "
+            f"-c lock_timeout={LOCK_TIMEOUT_MS} "
             f"-c idle_in_transaction_session_timeout="
-            f"{database_settings.idle_in_transaction_timeout_ms}"
+            f"{IDLE_IN_TRANSACTION_TIMEOUT_MS}"
         )
     },
 )

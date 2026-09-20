@@ -12,15 +12,15 @@ from src.packages.auth.schemas import UserRecord
 from src.responses import Envelope
 
 from . import service
-from .config import albums_settings
+from .config import ALBUM_DESCRIPTION_MAX_LENGTH, ALBUM_TITLE_MAX_LENGTH
 from .dependencies import get_accessible_album
 from .responses import AlbumDetailResponse, AlbumResponse, AlbumSummaryResponse
 from .schemas import AlbumDetailRow
 
 router = APIRouter(prefix="/albums")
 
-_Title = Annotated[str, Field(max_length=albums_settings.album_title_max_length)]
-_Description = Annotated[str, Field(max_length=albums_settings.album_description_max_length)] | None
+_Title = Annotated[str, Field(max_length=ALBUM_TITLE_MAX_LENGTH)]
+_Description = Annotated[str, Field(max_length=ALBUM_DESCRIPTION_MAX_LENGTH)] | None
 
 
 def _validate_title(value: str) -> str:

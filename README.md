@@ -148,7 +148,7 @@ See the values a service really got:
 docker compose -f compose.dev.yaml config
 ```
 
-A request rejected with `"code": "rate_limited"` or `"insufficient_capacity"` means the rate limit or the database's own connection pool got in the way, not that anything you sent was wrong -- the response says how long to wait. Set `RATE_LIMIT_ENABLED=false` in `.env` and restart `nginx` if you want to hammer the API during development without it getting in the way; it does not remove the limit from `nginx`'s own config, only raises it past anything a real client would reach.
+A request rejected with `"code": "rate_limited"` or `"insufficient_capacity"` means the rate limit or the database's own connection pool got in the way, not that anything you sent was wrong -- the response says how long to wait. The rate limit is fixed, not something you toggle from `.env`; if you need to hammer the API during development without it getting in the way, edit the numbers directly in `nginx/nginx.conf.template` and rebuild `nginx`.
 
 List what is in the local storage:
 
@@ -162,7 +162,7 @@ docker run --rm --network pixpick_pixpick --entrypoint sh \
 
 Change the user and the password if you changed them in `.env`.
 
-An upload that never finishes, or an album whose plazo has run out, leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows either one, and the `reconciler` service discards both on its own, every `RECONCILE_INTERVAL_SECONDS` — five minutes by default. You can still run it by hand, for instance right after testing an expiry instead of waiting out the interval:
+An upload that never finishes, or an album whose plazo has run out, leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows either one, and the `reconciler` service discards both on its own, every five minutes. You can still run it by hand, for instance right after testing an expiry instead of waiting out the interval:
 
 ```bash
 cd backend
@@ -243,7 +243,7 @@ Whichever you pick, it's the only value that changes -- `nginx`'s own configurat
 
 ### The rate limit and your CDN
 
-`nginx` limits how many requests it accepts from the same address per minute (`API_RATE_LIMIT_PER_MINUTE`, and the stricter `GRANTS_RATE_LIMIT_PER_MINUTE` for asking to upload a photo). If you put a CDN in front of the instance, configure a matching rate limit rule there too: `nginx`'s own counters live in memory and reset every time it restarts, while a CDN's own layer sits in front of that restart and does not. Match the CDN's rule to whichever of the two values in `.env` is stricter for the path it applies to, so a client that would be rejected here is rejected there first instead, before the request ever reaches your instance.
+`nginx` limits how many requests it accepts from the same address per minute (600 by default, and a stricter 30 for asking to upload a photo). Both are fixed in `nginx/nginx.conf.template`, not in `.env`. If you put a CDN in front of the instance, configure a matching rate limit rule there too: `nginx`'s own counters live in memory and reset every time it restarts, while a CDN's own layer sits in front of that restart and does not. Match the CDN's rule to whichever of the two is stricter for the path it applies to, so a client that would be rejected here is rejected there first instead, before the request ever reaches your instance.
 
 ### The backend (`backend/`)
 

@@ -24,7 +24,11 @@ class StorageSettings(BaseSettings):
     # since there's no separate scoped user in local mode.
     minio_access_key_id: str | None = None
     minio_secret_access_key: str | None = None
-    minio_bucket: str | None = None
+
+    # Defaults to "pixpick" (D4): the same bucket name everyone develops
+    # against unless they deliberately chose another one, so this never
+    # has to be filled in for the common case.
+    minio_bucket: str | None = "pixpick"
 
     # Two addresses for the same storage (D4 in
     # add-media-ports-and-local-adapters): the one the browser can reach,
