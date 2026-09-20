@@ -17,6 +17,12 @@ export interface ApiError {
 	field?: string | null;
 	requestId?: string | null;
 	details?: Record<string, unknown> | null;
+	// Only ever set for a rejection caused by a lack of capacity -- nginx's
+	// own rate limit, or the backend's connection pool (api-conventions
+	// spec, request-throttling spec) -- never for a validation failure or
+	// an unforeseen error. How many seconds to wait before trying the same
+	// request again.
+	retryAfterSeconds?: number | null;
 }
 
 export interface ApiEnvelope<T> {

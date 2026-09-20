@@ -1,6 +1,7 @@
 import {
 	CheckCircle2Icon,
 	CircleAlertIcon,
+	ClockIcon,
 	LoaderCircleIcon,
 } from "lucide-react";
 
@@ -21,14 +22,19 @@ const STATUS_LABEL: Record<UploadItemStatus, string> = {
 	pending: "Waiting for upload to finish",
 	rejected: "Rejected",
 	denied: "Not enough room",
+	busy: "Server busy",
 	failed: "Failed",
 };
 
-/** The three outcomes a person scans for, which the queue's eight
- * statuses collapse into (D5). The group is what reads at a glance --
- * icon and color, no text -- while each status keeps its own wording
- * below it for the detail. */
-export type UploadOutcome = "running" | "done" | "failed";
+/** The four outcomes a person scans for, which the queue's statuses
+ * collapse into (D5). The group is what reads at a glance -- icon and
+ * color, no text -- while each status keeps its own wording below it for
+ * the detail. "busy" is its own outcome, not "failed" (request-
+ * throttling spec, task 4.8): nothing about the file was wrong, the
+ * instance just couldn't take it yet, so it reads as transient instead
+ * of as a defect -- and, unlike "failed", the same retry is expected to
+ * work once the wait is over instead of only maybe helping. */
+export type UploadOutcome = "running" | "done" | "busy" | "failed";
 
 const STATUS_OUTCOME: Record<UploadItemStatus, UploadOutcome> = {
 	queued: "running",
@@ -40,6 +46,7 @@ const STATUS_OUTCOME: Record<UploadItemStatus, UploadOutcome> = {
 	pending: "failed",
 	rejected: "failed",
 	denied: "failed",
+	busy: "busy",
 	failed: "failed",
 };
 
@@ -50,18 +57,21 @@ export function uploadOutcomeOf(status: UploadItemStatus): UploadOutcome {
 const OUTCOME_ICON = {
 	running: LoaderCircleIcon,
 	done: CheckCircle2Icon,
+	busy: ClockIcon,
 	failed: CircleAlertIcon,
 } as const;
 
 const OUTCOME_ICON_CLASS: Record<UploadOutcome, string> = {
 	running: "text-muted-foreground animate-spin",
 	done: "text-primary",
+	busy: "text-amber-600 dark:text-amber-500",
 	failed: "text-destructive",
 };
 
 const OUTCOME_TEXT_CLASS: Record<UploadOutcome, string> = {
 	running: "text-muted-foreground",
 	done: "text-muted-foreground",
+	busy: "text-amber-600 dark:text-amber-500",
 	failed: "text-destructive",
 };
 
@@ -96,10 +106,14 @@ interface UploadItemCardProps {
 export function UploadItemCard({ item, onRetry }: UploadItemCardProps) {
 	const outcome = STATUS_OUTCOME[item.status];
 	const { head, tail } = splitName(item.file.name);
-	// Unchanged from what the queue already allows: a transfer that fell
-	// over and a file that wasn't granted room are the two a person can
-	// do something about by asking again.
-	const canRetry = item.status === "failed" || item.status === "denied";
+	// A transfer that fell over, a file that wasn't granted room, and one
+	// the instance couldn't take yet are the ones a person can do
+	// something about by asking again (task 4.8: retrying "busy" is
+	// expected to succeed once the wait is over, not just maybe help).
+	const canRetry =
+		item.status === "failed" ||
+		item.status === "denied" ||
+		item.status === "busy";
 	const Icon = OUTCOME_ICON[outcome];
 
 	return (

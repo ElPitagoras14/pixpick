@@ -46,3 +46,10 @@ MAX_BATCH_SIZE = 50
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MiB
 ALLOWED_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 UPLOAD_GRANT_TTL = timedelta(minutes=15)
+
+# A declared dimension is a presentation hint only (photo-upload spec) and
+# never involved in authorization or storage, but it still has to be a
+# credible pixel count: well above any camera's real output, and low enough
+# that a hostile value can't be mistaken for one (harden-local-profile,
+# task 1.1).
+MAX_DIMENSION = 20_000

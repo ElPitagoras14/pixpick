@@ -6,7 +6,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from src.storage.config import storage_settings
 from src.storage.exceptions import StorageNotReadyError, StorageUnavailableError
-from src.storage.port import ObjectMetadata, UploadGrant, object_key
+from src.storage.port import DELETE_BATCH_LIMIT, ObjectMetadata, UploadGrant, batched, object_key
 
 # S3-compatible providers reject a v2-signed request; MinIO and Cloudflare
 # R2 both require v4.
@@ -49,6 +49,10 @@ class R2StorageAdapter:
         self._browser_client = _client()
         self._server_client = _client()
         self._bucket = storage_settings.r2_bucket
+
+    @property
+    def bucket(self) -> str:
+        return self._bucket
 
     async def ensure_ready(self) -> None:
         """Checks, never creates (D2). This bucket is created once at the
@@ -109,10 +113,18 @@ class R2StorageAdapter:
         if not object_keys:
             return
         try:
-            await asyncio.to_thread(
-                self._server_client.delete_objects,
-                Bucket=self._bucket,
-                Delete={"Objects": [{"Key": key} for key in object_keys], "Quiet": True},
-            )
+            # Split here, not by whoever calls this (D7 in harden-local-
+            # profile's design): the S3 protocol rejects a DeleteObjects
+            # request naming more than DELETE_BATCH_LIMIT keys, and the
+            # two callers that can exceed it -- periodic cleanup and
+            # deleting an album -- have no way to know that limit without
+            # knowing which provider is active, which is exactly what
+            # this port exists to hide.
+            for batch in batched(object_keys, DELETE_BATCH_LIMIT):
+                await asyncio.to_thread(
+                    self._server_client.delete_objects,
+                    Bucket=self._bucket,
+                    Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True},
+                )
         except (BotoCoreError, ClientError) as exc:
             raise StorageUnavailableError("could not reach the object storage") from exc

@@ -14,7 +14,7 @@ from src.packages.auth.schemas import UserRecord
 from src.responses import Envelope
 
 from . import service
-from .config import MAX_BATCH_SIZE
+from .config import MAX_BATCH_SIZE, MAX_DIMENSION, MAX_FILE_SIZE
 from .responses import (
     ConfirmationResultResponse,
     GalleryResponse,
@@ -29,9 +29,12 @@ router = APIRouter(prefix="/albums/{album_id}/photos")
 
 class GrantPhotoRequest(ApiModel):
     content_type: str
-    size: int
-    width: int | None = None
-    height: int | None = None
+    # Positive and below the maximum (photo-upload spec, D5): a value that
+    # isn't positive doesn't describe any possible file and, subtracted
+    # from what's available, would grow it instead of consuming it.
+    size: Annotated[int, Field(gt=0, le=MAX_FILE_SIZE)]
+    width: Annotated[int, Field(gt=0, le=MAX_DIMENSION)] | None = None
+    height: Annotated[int, Field(gt=0, le=MAX_DIMENSION)] | None = None
 
     def to_input(self) -> GrantFileInput:
         return GrantFileInput(
@@ -50,7 +53,11 @@ class GrantPhotosRequest(ApiModel):
 
 
 class ConfirmPhotosRequest(ApiModel):
-    photo_ids: Annotated[list[UUID], Field(min_length=1)]
+    # Same ceiling as granting (photo-upload spec, ADDED requirement): a
+    # confirmation that isn't available yet costs a storage lookup, so the
+    # amount of work one request can trigger has to stay bounded by what
+    # that same request costs to send, not by whatever list a client sends.
+    photo_ids: Annotated[list[UUID], Field(min_length=1, max_length=MAX_BATCH_SIZE)]
 
 
 @router.get("")

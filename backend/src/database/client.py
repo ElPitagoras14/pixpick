@@ -14,10 +14,34 @@ from .config import database_settings
 POOL_SIZE = 5
 MAX_OVERFLOW = 15
 
+# A connection that's gone stale -- the network dropped it, or Postgres
+# closed it -- fails the next query with a driver error instead of a
+# clean retry, unless the pool checks it first (D11 in harden-local-
+# profile's design: "la validación y el reciclado de conexiones del
+# pool"). `pool_recycle` bounds how long any one connection is trusted
+# without that check at all, so a connection killed from the server side
+# for being older than that never gets the chance to fail a query first.
+POOL_PRE_PING = True
+POOL_RECYCLE_SECONDS = 1_800
+
 engine: AsyncEngine = create_async_engine(
     database_settings.database_url,
     pool_size=POOL_SIZE,
     max_overflow=MAX_OVERFLOW,
+    pool_pre_ping=POOL_PRE_PING,
+    pool_recycle=POOL_RECYCLE_SECONDS,
+    connect_args={
+        # Three session-level ceilings (database-access spec), forwarded
+        # to Postgres the same way `psql`'s own `-c` flag would: no
+        # statement runs, no lock is waited on, and no transaction sits
+        # idle, past what `database.config` declares.
+        "options": (
+            f"-c statement_timeout={database_settings.statement_timeout_ms} "
+            f"-c lock_timeout={database_settings.lock_timeout_ms} "
+            f"-c idle_in_transaction_session_timeout="
+            f"{database_settings.idle_in_transaction_timeout_ms}"
+        )
+    },
 )
 
 

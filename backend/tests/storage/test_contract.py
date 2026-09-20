@@ -104,6 +104,25 @@ async def test_several_objects_are_deleted_in_one_operation(storage_harness):
         assert await storage_harness.port.get_object(object_key=key) is None
 
 
+async def test_deleting_more_than_the_protocol_batch_limit_still_deletes_all_of_it(
+    storage_harness,
+):
+    """Task 5.1: the caller sends one call naming more objects than a
+    single DeleteObjects request can carry (object-storage spec, D7) --
+    it's the port's own job to split it, not this test's setup and not
+    whoever calls it in production."""
+    from src.storage.port import DELETE_BATCH_LIMIT
+
+    over_the_limit = DELETE_BATCH_LIMIT + 5
+    keys = [f"albums/contract-test/batch-{i}" for i in range(over_the_limit)]
+
+    # Deleting something absent is already established as a no-op
+    # (the scenario above): what's new here is only whether the request
+    # as a whole survives naming more keys than the protocol allows in
+    # one call, which needs no real object behind any of them.
+    await storage_harness.port.delete_objects(object_keys=keys)
+
+
 async def test_preparing_the_storage_leaves_it_ready_and_repeating_it_changes_nothing(
     storage_harness,
 ):

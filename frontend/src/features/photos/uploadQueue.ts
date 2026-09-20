@@ -53,6 +53,12 @@ export type UploadItemStatus =
 	// and, unlike a failure, the way out is to free space, not to retry
 	// the same thing hoping for a different answer.
 	| "denied"
+	// The instance couldn't take this request right now -- nginx's own
+	// rate limit, or the backend's connection pool (request-throttling
+	// spec, task 4.8) -- a state of its own, not a failure: nothing about
+	// this file was wrong, and the way out is to wait and retry the same
+	// thing, unlike "failed" below.
+	| "busy"
 	| "failed";
 
 export interface UploadItem {
@@ -97,6 +103,19 @@ function errorMessage(error: unknown): string {
 		if (typeof message === "string") return message;
 	}
 	return "Something went wrong.";
+}
+
+/** How long to wait before retrying, only ever set on a rejection caused
+ * by a lack of capacity (api-conventions spec, task 4.8) -- `null` for
+ * every other kind of error, including one with no response at all. */
+function capacityRetryAfter(error: unknown): number | null {
+	if (!axios.isAxiosError(error)) return null;
+	const seconds = error.response?.data?.error?.retryAfterSeconds;
+	return typeof seconds === "number" ? seconds : null;
+}
+
+function busyMessage(retryAfterSeconds: number): string {
+	return `Server is busy — retry in ${retryAfterSeconds}s`;
 }
 
 async function readImageDimensions(
@@ -187,9 +206,14 @@ async function processBatch(
 		granted = result.granted;
 		denied = result.denied;
 	} catch (error) {
-		const message = errorMessage(error);
+		const retryAfterSeconds = capacityRetryAfter(error);
 		items.forEach((item) => {
-			update(item.id, { status: "failed", error: message });
+			update(
+				item.id,
+				retryAfterSeconds != null
+					? { status: "busy", error: busyMessage(retryAfterSeconds) }
+					: { status: "failed", error: errorMessage(error) },
+			);
 		});
 		return;
 	}
@@ -219,7 +243,13 @@ async function processBatch(
 				update(item.id, { progress: 100 });
 				uploaded.push({ item, grant });
 			} catch (error) {
-				update(item.id, { status: "failed", error: errorMessage(error) });
+				const retryAfterSeconds = capacityRetryAfter(error);
+				update(
+					item.id,
+					retryAfterSeconds != null
+						? { status: "busy", error: busyMessage(retryAfterSeconds) }
+						: { status: "failed", error: errorMessage(error) },
+				);
 			}
 		}),
 		MAX_CONCURRENT_UPLOADS,
@@ -247,9 +277,14 @@ async function processBatch(
 			});
 		});
 	} catch (error) {
-		const message = errorMessage(error);
+		const retryAfterSeconds = capacityRetryAfter(error);
 		uploaded.forEach(({ item }) => {
-			update(item.id, { status: "failed", error: message });
+			update(
+				item.id,
+				retryAfterSeconds != null
+					? { status: "busy", error: busyMessage(retryAfterSeconds) }
+					: { status: "failed", error: errorMessage(error) },
+			);
 		});
 	}
 }

@@ -1,6 +1,23 @@
+from collections.abc import Iterator
 from typing import Protocol
 
 from pydantic import BaseModel
+
+# The S3 protocol's own ceiling on how many objects a single DeleteObjects
+# request may name (object-storage spec, D7 in harden-local-profile's
+# design) -- a property of the wire format both MinIO and Cloudflare R2
+# speak, not of either provider, so it lives here once instead of being
+# duplicated in each adapter that needs to respect it.
+DELETE_BATCH_LIMIT = 1000
+
+
+def batched(items: list[str], size: int) -> Iterator[list[str]]:
+    """Splits `items` into consecutive chunks of at most `size`, the last
+    one shorter if it doesn't divide evenly. What an adapter's own
+    `delete_objects` uses to stay under `DELETE_BATCH_LIMIT` without its
+    caller ever having to know that limit exists (D7)."""
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
 
 
 def object_key(*, album_id: str, photo_id: str) -> str:
@@ -44,6 +61,17 @@ class StoragePort(Protocol):
     the transformer reads originals from the storage on its own, and no
     other consumer has a reason to hold an image in memory.
     """
+
+    @property
+    def bucket(self) -> str:
+        """The name of the space this provider keeps this project's
+        objects in (image-delivery spec, D10 in harden-local-profile's
+        design): what a consumer that has to name it in an address --
+        the transformer, building the `s3://bucket/key` it reads an
+        original from -- reads instead of a fixed provider's own config,
+        so that address always names whichever provider is actually
+        active."""
+        ...
 
     async def ensure_ready(self) -> None:
         """Leaves the space this project keeps its objects in ready to

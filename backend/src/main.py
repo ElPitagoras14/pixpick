@@ -28,6 +28,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await dispose_engine()
 
 
+# The only peer that ever connects to this process in containers mode is
+# nginx, itself a member of the "pixpick" network (request-throttling spec,
+# D4) -- so this is the one range trusted to declare a client's real
+# address via X-Forwarded-For/X-Forwarded-Proto, the same trust nginx
+# itself extends to the platform's proxy (nginx/nginx.conf). Fixed to
+# compose.yaml/compose.dev.yaml's own `ip_range` for that network: an
+# internal wiring detail hardcoded on both sides, not an environment
+# difference. Native mode never runs nginx in front of this process at
+# all, so the value is unused there.
+_TRUSTED_PROXY_NETWORK = "172.30.238.128/25"
+
 app = FastAPI(title="pixpick", lifespan=lifespan)
 
 register_exception_handlers(app)
@@ -55,4 +66,5 @@ if __name__ == "__main__":
         port=8000,
         loop=loop_factory,
         reload=reload,
+        forwarded_allow_ips=_TRUSTED_PROXY_NETWORK,
     )

@@ -49,6 +49,22 @@ class ValidationFailedError(Exception):
         super().__init__(f"{field}: {message}")
 
 
+class InsufficientCapacityError(Exception):
+    """Raised when a well-formed, authorized request can't be served
+    because a shared resource is saturated -- the connection pool
+    exhausted, for now (request-throttling spec, api-conventions spec) --
+    rather than because of anything about the request itself. Answered
+    with 503 and a retry-after, never as a validation failure or as an
+    unforeseen error (api-conventions spec): the three call for different
+    reactions from whoever's asking, and this one calls only for trying
+    the same request again once the wait is over.
+    """
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(f"insufficient capacity, retry after {retry_after_seconds}s")
+
+
 class StateConflictError(Exception):
     """Raised when a well-formed request cannot proceed because of the
     state of the resource it targets -- never because of what was sent

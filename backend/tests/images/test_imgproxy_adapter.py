@@ -36,6 +36,24 @@ def test_the_address_encodes_the_bucket_and_object_key():
     assert _decode_source(url) == f"s3://{storage_settings.minio_bucket}/albums/a/p"
 
 
+def test_the_address_names_whichever_providers_space_is_active(monkeypatch):
+    """Task 7.1 (image-delivery spec, D10): the bucket comes from the
+    active storage port's own `bucket`, not from MinIO's fixed config --
+    swapping the active port for one naming a different space changes
+    the address, instead of it staying pinned to MinIO's own."""
+    import src.images.adapters.imgproxy as imgproxy_module
+
+    class _OtherProviderPort:
+        bucket = "some-other-providers-bucket"
+
+    monkeypatch.setattr(imgproxy_module, "storage_port", _OtherProviderPort())
+
+    adapter = ImgproxyAdapter()
+    url = adapter.variant_url(object_key="albums/a/p", variant=Variant.THUMBNAIL)
+
+    assert _decode_source(url) == "s3://some-other-providers-bucket/albums/a/p"
+
+
 def test_the_address_is_stable_for_the_same_input():
     adapter = ImgproxyAdapter()
     first = adapter.variant_url(object_key="albums/a/p", variant=Variant.VIEWER)

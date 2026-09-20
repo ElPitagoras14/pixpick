@@ -1,7 +1,8 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from src.database.dependencies import get_connection
@@ -11,11 +12,15 @@ from src.packages.auth.schemas import UserRecord
 from src.responses import Envelope
 
 from . import service
+from .config import albums_settings
 from .dependencies import get_accessible_album
 from .responses import AlbumDetailResponse, AlbumResponse, AlbumSummaryResponse
 from .schemas import AlbumDetailRow
 
 router = APIRouter(prefix="/albums")
+
+_Title = Annotated[str, Field(max_length=albums_settings.album_title_max_length)]
+_Description = Annotated[str, Field(max_length=albums_settings.album_description_max_length)] | None
 
 
 def _validate_title(value: str) -> str:
@@ -29,15 +34,15 @@ def _validate_title(value: str) -> str:
 
 
 class CreateAlbumRequest(ApiModel):
-    title: str
-    description: str | None = None
+    title: _Title
+    description: _Description = None
 
     _validate_title = field_validator("title")(_validate_title)
 
 
 class RenameAlbumRequest(ApiModel):
-    title: str
-    description: str | None = None
+    title: _Title
+    description: _Description = None
 
     _validate_title = field_validator("title")(_validate_title)
 

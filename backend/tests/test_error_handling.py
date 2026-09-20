@@ -4,11 +4,14 @@ a real domain endpoint existing yet, and it must keep working unchanged
 once one does.
 """
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src import handlers as handlers_module
 from src.exceptions import (
     ForbiddenError,
+    InsufficientCapacityError,
     NotFoundError,
     StateConflictError,
     UnauthenticatedError,
@@ -74,6 +77,10 @@ def _build_app() -> FastAPI:
     @app.get("/boom")
     def boom():
         raise RuntimeError("leaked detail nobody should see, select * from users")
+
+    @app.get("/busy")
+    def busy():
+        raise InsufficientCapacityError(retry_after_seconds=5)
 
     return app
 
@@ -165,6 +172,26 @@ def test_an_unmatched_route_still_comes_back_in_the_project_shape():
     assert response.status_code == 404
     body = response.json()
     assert set(body.keys()) == {"data", "error"}
+
+
+def test_insufficient_capacity_responds_503_with_a_retry_after(monkeypatch):
+    """Tasks 4.5, 4.6: distinguishable from both a validation failure
+    (no field named) and an unforeseen error (no request id, and --
+    unlike /boom above, which does call it -- nothing logged as an
+    error, since this is an expected, load-shedding response and not a
+    defect to investigate), and it carries how long to wait before
+    trying again."""
+    monkeypatch.setattr(handlers_module.logger, "error", lambda *a, **k: pytest.fail("logged"))
+
+    response = _client().get("/busy")
+    body = response.json()
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "5"
+    assert body["error"]["code"] == "insufficient_capacity"
+    assert body["error"]["retryAfterSeconds"] == 5
+    assert body["error"]["field"] is None
+    assert body["error"]["requestId"] is None
 
 
 def test_a_state_conflict_is_not_presented_as_a_validation_failure():

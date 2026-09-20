@@ -6,7 +6,7 @@ from src.config import settings
 from src.images.catalog import CATALOG, FORMAT
 from src.images.config import images_settings
 from src.images.port import Variant
-from src.storage.config import storage_settings
+from src.storage.factory import storage_port
 
 # Must match nginx's images location block (nginx/nginx.conf) -- the
 # same relationship the backend's own "/api" prefix has with nginx's
@@ -46,11 +46,14 @@ class ImgproxyAdapter:
     """
 
     def variant_url(self, *, object_key: str, variant: Variant) -> str:
-        # The bucket comes from the storage's own config rather than a
-        # second variable that would just have to be kept in sync with it:
-        # the transformer and the storage adapter must agree on where
-        # originals live, so there's exactly one place that says so.
-        source = f"s3://{storage_settings.minio_bucket}/{object_key}"
+        # The bucket comes from the active storage port itself (image-
+        # delivery spec, D10 in harden-local-profile's design), not a
+        # fixed provider's own config: MinIO's bucket named here while
+        # R2 is the one actually active would build an address that
+        # doesn't resolve, and the transformer's own combination guard
+        # (D10) is what makes that combination fail at startup instead
+        # of the first request for a variant.
+        source = f"s3://{storage_port.bucket}/{object_key}"
         encoded_source = _b64url(source.encode())
         path = f"/{_processing_options(variant)}/{encoded_source}.{FORMAT}"
         signature = _sign(path)

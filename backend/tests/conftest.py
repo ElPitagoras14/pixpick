@@ -129,6 +129,36 @@ def _point_the_default_engine_at_the_test_database(test_engine, monkeypatch):
 
 
 @pytest.fixture
+def running_stack():
+    """Skips a real-stack test when `docker compose -f compose.dev.yaml
+    up -d --build` isn't already running, instead of failing with a
+    connection error that reads like a bug in what's under test.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                "compose.dev.yaml",
+                "ps",
+                "--status",
+                "running",
+                "-q",
+                "nginx",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError:
+        pytest.skip("docker is not available")
+        return
+    if not result.stdout.strip():
+        pytest.skip("compose.dev.yaml's nginx is not running")
+
+
+@pytest.fixture
 def fake_storage(monkeypatch):
     """Swaps the real storage adapter for the in-memory double in both
     packages that call it, so albums/photos tests never need MinIO up.

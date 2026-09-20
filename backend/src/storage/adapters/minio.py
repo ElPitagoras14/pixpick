@@ -6,7 +6,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from src.storage.config import storage_settings
 from src.storage.exceptions import StorageUnavailableError
-from src.storage.port import ObjectMetadata, UploadGrant, object_key
+from src.storage.port import DELETE_BATCH_LIMIT, ObjectMetadata, UploadGrant, batched, object_key
 
 # S3-compatible providers reject a v2-signed request; MinIO and Cloudflare
 # R2 both require v4.
@@ -26,7 +26,14 @@ def _client(endpoint: str):
         endpoint_url=endpoint,
         aws_access_key_id=storage_settings.minio_access_key_id,
         aws_secret_access_key=storage_settings.minio_secret_access_key,
-        config=Config(signature_version=_SIGNATURE_VERSION),
+        # Explicit, not left to boto3's own auto-detection (harden-local-
+        # profile, task 3.2): the storage's own hostname is now a
+        # subdomain of the application's (STORAGE_PUBLIC_URL), which looks
+        # enough like a virtual-hosted-style bucket subdomain that
+        # auto-detection could pick the wrong style. Path style is what
+        # nginx's storage server block forwards untouched -- the bucket is
+        # the first path segment, never part of the Host it matches on.
+        config=Config(signature_version=_SIGNATURE_VERSION, s3={"addressing_style": "path"}),
     )
 
 
@@ -40,6 +47,10 @@ class MinioStorageAdapter:
         self._browser_client = _client(storage_settings.minio_browser_endpoint)
         self._server_client = _client(storage_settings.minio_server_endpoint)
         self._bucket = storage_settings.minio_bucket
+
+    @property
+    def bucket(self) -> str:
+        return self._bucket
 
     async def ensure_ready(self) -> None:
         """Creates the bucket when it's missing (D2). This is the
@@ -112,10 +123,17 @@ class MinioStorageAdapter:
         if not object_keys:
             return
         try:
-            await asyncio.to_thread(
-                self._server_client.delete_objects,
-                Bucket=self._bucket,
-                Delete={"Objects": [{"Key": key} for key in object_keys], "Quiet": True},
-            )
+            # Split here, not by whoever calls this (D7): the S3 protocol
+            # rejects a DeleteObjects request naming more than
+            # DELETE_BATCH_LIMIT keys, and the two callers that can
+            # exceed it -- periodic cleanup and deleting an album -- have
+            # no way to know that limit without knowing which provider is
+            # active, which is exactly what this port exists to hide.
+            for batch in batched(object_keys, DELETE_BATCH_LIMIT):
+                await asyncio.to_thread(
+                    self._server_client.delete_objects,
+                    Bucket=self._bucket,
+                    Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True},
+                )
         except (BotoCoreError, ClientError) as exc:
             raise StorageUnavailableError("could not reach the object storage") from exc
