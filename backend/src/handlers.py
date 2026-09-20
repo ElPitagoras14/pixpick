@@ -21,9 +21,7 @@ from .responses import error_envelope
 
 
 async def _database_error_handler(request: Request, exc: DatabaseError) -> JSONResponse:
-    """Translates any data-layer failure into a response with no trace of
-    the query, the driver, or table/column names (database-access spec).
-    """
+    """No trace of the query, the driver, or table and column names."""
     return JSONResponse(
         status_code=503,
         content=error_envelope("service_unavailable", "the service is temporarily unavailable"),
@@ -33,11 +31,8 @@ async def _database_error_handler(request: Request, exc: DatabaseError) -> JSONR
 async def _insufficient_capacity_handler(
     request: Request, exc: InsufficientCapacityError
 ) -> JSONResponse:
-    """Distinguishable from both a validation failure and an unforeseen
-    error (request-throttling spec, api-conventions spec): 503, a code of
-    its own, and a retry-after -- never logged as an error, since this is
-    an expected, load-shedding response, not a defect to investigate.
-    """
+    """503 with a code of its own and a retry-after. Never logged as an
+    error: shedding load is expected, not a defect."""
     return JSONResponse(
         status_code=503,
         content=error_envelope(
@@ -78,10 +73,8 @@ async def _validation_failed_handler(request: Request, exc: ValidationFailedErro
 
 
 async def _state_conflict_handler(request: Request, exc: StateConflictError) -> JSONResponse:
-    """409, never 422 (api-conventions spec, added by add-albums-and-upload):
-    the status code alone is what tells a client this apart from a
-    validation failure -- nothing here names a field as invalid.
-    """
+    """409, never 422: the status alone tells a client this apart, since
+    nothing here names an invalid field."""
     return JSONResponse(
         status_code=409,
         content=error_envelope(exc.code, exc.message, details=exc.details),
@@ -108,7 +101,7 @@ async def _request_validation_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     """FastAPI's own validation failure, reshaped into this project's
-    envelope instead of its default body (api-conventions spec)."""
+    envelope instead of its default body."""
     first_error = exc.errors()[0]
     field = ".".join(str(part) for part in first_error["loc"] if part != "body")
     return JSONResponse(
@@ -118,9 +111,8 @@ async def _request_validation_handler(
 
 
 async def _http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    """Catches anything raised as a plain `HTTPException` -- including the
-    framework's own 404 for an unmatched route -- so even those still
-    come back in this project's shape (api-conventions spec)."""
+    """Including the framework's own 404 for an unmatched route, so even
+    those come back in this project's shape."""
     return JSONResponse(
         status_code=exc.status_code,
         content=error_envelope("http_error", str(exc.detail)),
@@ -128,10 +120,8 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
 
 
 async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Anything not previously matched is unforeseen: the response stays
-    generic and carries an id that identifies the logged detail, instead
-    of the exception's own message, traceback, or origin (api-conventions
-    spec)."""
+    """Generic, carrying an id that identifies the logged detail rather than
+    the exception's message, traceback or origin."""
     request_id = str(uuid.uuid4())
     logger.opt(exception=exc).error(f"unhandled error, request_id={request_id}")
     return JSONResponse(
@@ -154,8 +144,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidCodeError, _invalid_code_handler)
     app.add_exception_handler(RequestValidationError, _request_validation_handler)
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
-    # Registered last (Starlette resolves by the most specific match in
-    # the exception's MRO, not registration order) so anything with no
-    # handler of its own still lands here instead of propagating as a
-    # bare 500 with no body.
+    # Last, so anything without a handler of its own lands here instead of
+    # a bare 500. Starlette resolves by the exception's MRO, not by order.
     app.add_exception_handler(Exception, _unhandled_error_handler)

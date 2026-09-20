@@ -1,24 +1,10 @@
-# The published-images declaration of the environment: the project's own
-# four images (migrate, backend, frontend, nginx) are pulled by tag rather
-# than built, and no port is published to the host -- the platform's own
-# proxy reaches the services over this network. It is complete on its own
-# and is never combined with another file:
-#
-#   docker compose up
-#
-# No workflow publishes these tags to GHCR yet -- `ghcr.io/elpitagoras14/
-# pixpick-*:latest` doesn't exist there today, so this file can't start
-# those four until one does. compose.dev.yaml is the other declaration,
-# the one that builds from source; the two describe the same seven
-# services and differ only in where each image comes from and which ports
-# are published.
+# Pulls the project's four images by tag and publishes no port: the
+# platform's proxy reaches them over this network. Complete on its own,
+# never combined with compose.dev.yaml. Every service declares a memory
+# ceiling and a restart policy, because they share one machine. No workflow
+# publishes these tags yet, so this file cannot start those four.
 services:
   postgres:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 512m
     restart: unless-stopped
     image: postgres:18.6
@@ -26,9 +12,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    # A single mount at /var/lib/postgresql, not .../data: the postgres 18+
-    # image lays out its major-version-specific data directory underneath
-    # this path (pg_ctlcluster-style) and refuses to start otherwise.
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
@@ -39,19 +22,9 @@ services:
     networks:
       - pixpick
 
-  # Runs once, applies pending migrations, and exits (D6). Its connection
-  # string is assembled here from the same Postgres server values instead of
-  # being written by hand (D7). Bakes the pinned dbmate version and the
-  # project's migrations into its image -- see dbmate/Dockerfile. `up`, not
-  # `migrate`: the database the connection string names may not exist yet
-  # the first time it is used, and `up` creates it before migrating --
-  # a no-op every other time.
+  # `up`, not `migrate`: the database may not exist the first time, and `up`
+  # creates it before migrating.
   migrate:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 256m
     restart: "no"
     image: ghcr.io/elpitagoras14/pixpick-migrate:latest
@@ -65,11 +38,6 @@ services:
       - pixpick
 
   backend:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 512m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-backend:latest
@@ -84,14 +52,9 @@ services:
       MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
       MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET}
-      # STORAGE_PUBLIC_URL, not MINIO_BROWSER_ENDPOINT (object-storage
-      # spec, D1 in harden-local-profile's design): the browser now writes
-      # through the entry point's own storage hostname, not MinIO's own
-      # address, which native mode is the only profile that still uses
-      # MINIO_BROWSER_ENDPOINT's bare .env value for.
+      # Fed STORAGE_PUBLIC_URL, not the variable of the same name: in
+      # containers the browser writes through nginx's own storage hostname.
       MINIO_BROWSER_ENDPOINT: ${STORAGE_PUBLIC_URL}
-      # Composed here, never taken from .env: this is the address the
-      # services reach each other by inside this network.
       MINIO_SERVER_ENDPOINT: http://storage:9000
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
@@ -114,27 +77,13 @@ services:
     networks:
       - pixpick
 
-  # Discards expired uploads and expired albums on a schedule (photo-
-  # upload spec, album-retention spec, D6 in harden-local-profile's
-  # design): the same command `src/maintenance/reconcile.py`'s own
-  # docstring documents as a manual one, invoked here in a loop instead
-  # of by someone remembering to run it. The local disk this profile
-  # shares between the storage, the database and the cache is what makes
-  # what it discards visible as a full disk instead of an unbilled
-  # difference (D6) -- the same image as `backend`, since this is the
-  # same codebase's own command, not a service of its own.
+  # The storage, the database and the cache share one disk here, so what
+  # this discards is what keeps that disk from filling up.
   reconciler:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 256m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-backend:latest
     entrypoint: ["sh", "-c"]
-    # 300 seconds -- fixed, not configurable: no environment has a
-    # legitimate reason to run this cleanup at a different pace.
     command:
       - |
         while true; do
@@ -142,10 +91,7 @@ services:
           sleep 300
         done
     environment:
-      # Only what src/maintenance/reconcile.py's own import graph actually
-      # reaches (task 8.2): the database, the active storage provider's
-      # credentials, and album-retention's own setting -- never identity,
-      # images, or the quota/length settings this command never reads.
+      # Only what src/maintenance/reconcile.py's import graph reaches.
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER}
       MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
@@ -167,11 +113,6 @@ services:
       - pixpick
 
   frontend:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 128m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-frontend:latest
@@ -181,32 +122,17 @@ services:
     networks:
       - pixpick
 
-  # The object storage. The browser writes to it directly (D3 in
-  # add-media-ports-and-local-adapters), so unlike every other service here
-  # it is meant to be reached from outside the Docker network too, and this
-  # file publishes no port for it. Declared whether or not STORAGE_PROVIDER
-  # names it: which provider the application talks to is decided by that
-  # variable, never by which containers are up.
+  # Declared whether or not STORAGE_PROVIDER names it: that variable decides
+  # which provider the application talks to, never which containers run.
   storage:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 512m
     restart: unless-stopped
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY}
-      # Declared on the server, not on the bucket: MinIO has no working
-      # per-bucket CORS API -- PutBucketCors always answers NotImplemented
-      # -- and with a single bucket the two are equally precise anyway
-      # (D3, D9 in add-media-ports-and-local-adapters).
       MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_ALLOWED_ORIGINS}
-      # No console UI for this profile to expose (object-storage spec,
-      # task 6.1 in harden-local-profile): explicit, not left to whatever
-      # a given MinIO version defaults to without --console-address.
+      # Explicit, not whatever a given MinIO version defaults to.
       MINIO_BROWSER: "off"
     command: ["server", "/data"]
     volumes:
@@ -219,16 +145,9 @@ services:
     networks:
       - pixpick
 
-  # The image transformer. It reads originals from the storage by itself
-  # (D2): nothing in this project ever hands it bytes. nginx is the only
-  # way to reach it (D5), unlike the storage above. Declared whether or not
-  # IMAGE_PROVIDER names it, same as `storage`.
+  # It reads originals from the storage itself: nothing here ever hands it
+  # bytes. Declared whether or not IMAGE_PROVIDER names it, like `storage`.
   transformer:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 512m
     restart: unless-stopped
     image: darthsim/imgproxy:v4.0.14
@@ -241,27 +160,18 @@ services:
       IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
-      # Explicit ceilings the transformer enforces on its own (image-
-      # delivery spec, task 6.2 in harden-local-profile): reaching it is
-      # reaching a resource with real CPU and memory cost behind it, and
-      # a signed address is valid for any object in the storage, not only
-      # the ones this project's own catalog ever requests. Fixed, not
-      # configurable: no environment has a legitimate reason for a
-      # different ceiling here.
+      # A signed address is valid for any object in the storage, not only the
+      # ones this project's catalog requests, and each costs real CPU.
       IMGPROXY_MAX_SRC_RESOLUTION: "40"
       IMGPROXY_MAX_SRC_FILE_SIZE: "20971520"
-      # 2048 -- the catalog's own largest variant (backend/src/images/
-      # catalog.py, Variant.VIEWER): a hard ceiling on top of it, not a
-      # duplicate of it, so a future catalog entry that forgets to stay
-      # under it fails loudly instead of quietly serving something bigger.
+      # A ceiling over the catalog's largest variant
+      # (backend/src/images/catalog.py), not a copy of it: an entry that
+      # outgrows this fails loudly instead of serving something bigger.
       IMGPROXY_MAX_RESULT_DIMENSION: "2048"
       IMGPROXY_WORKERS_NUMBER: "2"
       IMGPROXY_DOWNLOAD_TIMEOUT: "10"
-      # Read access limited to the albums prefix (object-storage spec):
-      # a signature covers only the object identity and the content
-      # type, never which prefix it lives under, so this is the one
-      # place that keeps a filtered signature from reaching the rest of
-      # the bucket.
+      # A signature covers the object identity and content type, never the
+      # prefix, so this is what keeps a signed address inside albums/.
       IMGPROXY_ALLOWED_SOURCES: s3://${MINIO_BUCKET}/albums/*
     depends_on:
       storage:
@@ -269,50 +179,25 @@ services:
     networks:
       - pixpick
 
-  # The single door to the host: routes to the backend, the transformer, and
-  # the frontend. No service in this file publishes a port: the platform's
-  # own proxy reaches them over this network instead (D7).
   nginx:
-    # Explicit ceiling and restart policy (local-environment spec,
-    # task 6.3 in harden-local-profile): the services share one
-    # machine, so none of them is left free to take all its memory,
-    # and each one says on its own whether it comes back after
-    # ending unexpectedly.
     mem_limit: 128m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-nginx:latest
     environment:
-      # Where its own storage server block matches an incoming Host
-      # (nginx/entrypoint.sh derives the bare hostname from this; object-
-      # storage spec, D1). The same value the backend receives as
-      # MINIO_BROWSER_ENDPOINT above, so the two always name the same
-      # hostname.
+      # nginx/entrypoint.sh derives its storage server block's hostname from
+      # this. The same value the backend gets as MINIO_BROWSER_ENDPOINT, so
+      # the two can never differ.
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
     volumes:
-      # The images cache (D12 in add-media-ports-and-local-adapters): a
-      # volume, not an anonymous layer, so it survives a container
-      # restart instead of re-warming from nothing every time.
       - nginx-cache:/var/cache/nginx/images
     networks:
       - pixpick
 
-# A fixed subnet, not Docker's own dynamic allocation (request-throttling
-# spec, D4): nginx and the backend each trust exactly the container range
-# below as the only peer allowed to declare a client's real address --
-# nginx trusts it as the platform's own proxy (which joins this same
-# network instead of reaching nginx through a published port, D7), and the
-# backend trusts it as nginx. `ip_range` keeps every container's address
-# inside the upper half of the subnet; `gateway` pins the gateway address
-# outside of it instead of letting Docker default it to the first address
-# of that same range. That gateway address is what a connection from
-# outside the network -- the host, in compose.dev.yaml's published port --
-# arrives as, so leaving it out of the trusted range is what makes a
-# request forged from there fail to be trusted instead of trusting the
-# whole network back into itself (task 2.3). The literal values are
-# hardcoded again in nginx/nginx.conf
-# and backend/src/main.py: an internal wiring detail the two sides have to
-# agree on, not an environment difference (same reasoning as the "/images"
-# prefix in src/images/adapters/imgproxy.py).
+# A fixed subnet, not Docker's dynamic allocation: nginx and the backend
+# trust exactly the range below to declare a client's address. `gateway`
+# sits outside `ip_range`, because a connection from outside arrives as the
+# gateway and trusting it would trust anything that reaches the host. The
+# same literals are in nginx/nginx.conf.template and backend/src/main.py.
 networks:
   pixpick:
     ipam:

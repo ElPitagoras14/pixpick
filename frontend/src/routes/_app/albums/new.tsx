@@ -32,8 +32,8 @@ function NewAlbum() {
 					});
 				},
 				onError: (error) => {
-					// The field the server names lands on the field itself
-					// (api-conventions spec), not as a generic banner.
+					// The field the server names lands on the field itself, not as a
+					// generic banner.
 					if (
 						error instanceof ApiRequestError &&
 						error.error.field === "title"
@@ -47,8 +47,8 @@ function NewAlbum() {
 
 	return (
 		<div className="mx-auto max-w-sm p-6">
-			{/* The header button covers mobile; desktop had no way out of
-			this screen at all (design.md D on albums/new.tsx). */}
+			{/* The header button covers mobile; desktop had no way out of this
+			screen at all. */}
 			<Link
 				to="/albums"
 				search={{ group: "own" }}

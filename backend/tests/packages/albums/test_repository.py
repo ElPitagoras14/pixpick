@@ -70,8 +70,8 @@ async def test_list_member_albums_resolves_count_cover_and_pending_in_one_query(
     assert by_title["Empty"].is_owner is True
     # Nothing rated yet: both available photos of "Populated" are pending.
     assert by_title["Populated"].pending_count == 2
-    # Only the two available photos count; the unavailable one is
-    # invisible to the count and never the cover (D1, photo-upload spec).
+    # Only the two available photos count; the unavailable one is invisible
+    # to the count and never the cover.
     assert by_title["Populated"].photo_count == 2
     assert by_title["Populated"].cover_photo_id == first_photo.id
 

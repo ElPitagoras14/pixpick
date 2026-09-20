@@ -86,9 +86,9 @@ def test_me_without_a_session_is_unauthenticated(client):
 
 
 def test_logout_is_a_write_and_does_not_respond_to_a_read(client):
-    """D4: with SameSite=Lax cookies, a GET could be triggered by another
-    site; only an explicit method that isn't a plain read reaches this
-    endpoint at all."""
+    """With SameSite=Lax cookies, a GET could be triggered by another site;
+    only an explicit method that isn't a plain read reaches this endpoint at
+    all."""
     response = client.get("/api/auth/logout")
     assert response.status_code == 405
 

@@ -24,9 +24,9 @@ export interface Photo {
 }
 
 export interface PhotoGrant {
-	// The position the file had in the request (D4): with a batch that
-	// can be granted only in part, the response is no longer as long as
-	// the request, so order alone no longer says which file this is for.
+	// The position the file had in the request: with a batch that can be
+	// granted only in part, the response is no longer as long as the request,
+	// so order alone no longer says which file this is for.
 	index: number;
 	photoId: string;
 	position: number;
@@ -34,12 +34,11 @@ export interface PhotoGrant {
 	uploadHeaders: Record<string, string>;
 }
 
-// Which of the three capacity limits stopped a file (photo-upload spec,
-// modified by add-instance-quota). Not resolved the same way: an album
-// that's full is resolved by creating another album, an account without
-// space by deleting something, and an instance without space is not
-// resolved by whoever is asking at all -- so they are never collapsed
-// into one message.
+// Which of the three capacity limits stopped a file. Not resolved the same
+// way: an album that's full is resolved by creating another album, an
+// account without space by deleting something, and an instance without
+// space is not resolved by whoever is asking at all -- so they are never
+// collapsed into one message.
 export type DenialReason = "album_full" | "account_full" | "instance_full";
 
 export interface PhotoDenial {
@@ -75,9 +74,9 @@ async function fetchPhotos(albumId: string): Promise<Photo[]> {
 	return response.data.data ?? [];
 }
 
-// The one place this query is defined (D9): the grid and the upload
-// view both invalidate it once their own work changes what it returns,
-// instead of each keeping its own copy.
+// The one place this query is defined: the grid and the upload view both
+// invalidate it once their own work changes what it returns, instead of
+// each keeping its own copy.
 export function photosQueryOptions(albumId: string) {
 	return queryOptions({
 		queryKey: ["albums", albumId, "photos"] as const,
@@ -86,9 +85,9 @@ export function photosQueryOptions(albumId: string) {
 }
 
 // Not a `useMutation` hook like the rest of this feature's writes: the
-// upload queue (`uploadQueue.ts`) drives many of these itself, batched
-// and in a specific order (D13), so it calls this function directly
-// instead of going through a component's own mutation lifecycle.
+// upload queue (`uploadQueue.ts`) drives many of these itself, batched and
+// in a specific order, so it calls this function directly instead of going
+// through a component's own mutation lifecycle.
 export async function grantPhotoBatch(
 	albumId: string,
 	files: GrantFileInput[],
@@ -138,19 +137,17 @@ export function useDeletePhoto(albumId: string) {
 	return useMutation({
 		mutationFn: deletePhoto,
 		onSuccess: () => {
-			// Freeing space is what re-enables adding (account-quota spec),
-			// so the meters that show how much is left are stale the moment
-			// a photo goes.
+			// Freeing space is what re-enables adding, so the meters that show how
+			// much is left are stale the moment a photo goes.
 			queryClient.invalidateQueries({
 				queryKey: accountUsageQueryOptions().queryKey,
 			});
 			queryClient.invalidateQueries({
 				queryKey: albumUsageQueryOptions(albumId).queryKey,
 			});
-			// A deleted photo can change the album's cover and count too
-			// (album-management spec), not only its own grid -- and, now
-			// that the grid is the gallery (rating-gallery spec), every one
-			// of its filters and their counts.
+			// A deleted photo can change the album's cover and count too, not only
+			// its own grid -- and, now that the grid is the gallery, every one of
+			// its filters and their counts.
 			queryClient.invalidateQueries({
 				queryKey: photosQueryOptions(albumId).queryKey,
 			});

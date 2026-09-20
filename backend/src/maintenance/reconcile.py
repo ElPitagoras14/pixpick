@@ -1,19 +1,16 @@
-"""D8 in add-albums-and-upload, extended by D3 in album-retention: a
-command, run whenever it's useful, not a permanent process. What it
-discards is invisible to everyone until then (Risks in both changes'
-designs), so there's no urgency that would justify a schedule.
+"""A command, not a permanent process: what it discards is invisible to
+everyone until it runs.
 
-    uv run python -m src.maintenance.reconcile
+uv run python -m src.maintenance.reconcile
 
-Also the migration check a storage provider change relies on (D6 in
-add-cloud-media-adapters): run with `--against` to report which objects a
-destination provider is still missing, instead of discarding anything.
+With `--against`, reports which objects a destination provider is still
+missing instead of discarding anything -- the check a storage provider
+change relies on.
 
-    uv run python -m src.maintenance.reconcile --against r2
+uv run python -m src.maintenance.reconcile --against r2
 
-Lives in this package of its own, not inside `packages.photos` (D3 in
-album-retention's design): what it discards now spans photos and whole
-albums, and neither one is the other's to contain.
+Its own package, not `packages.photos`: what it discards spans photos and
+whole albums.
 """
 
 import asyncio
@@ -32,33 +29,23 @@ from src.storage.port import object_key
 
 
 class Provider(StrEnum):
-    """The storage providers `--against` accepts -- the same values
-    `STORAGE_PROVIDER` does (object-storage spec)."""
+    """The same values `STORAGE_PROVIDER` accepts."""
 
     local = "local"
     r2 = "r2"
 
 
 async def reconcile() -> None:
-    """Discards what's expired and no longer needs to be kept around:
-    every photo still not available whose upload grant has expired --
-    an upload that will never complete -- and every album whose plazo
-    has run out, together with the objects either one may have left
-    behind (photo-upload spec, album-retention spec, D3). Two
-    independent passes, each with its own transaction and its own
-    storage cleanup after it, so a failure discarding albums never
-    stops uploads from being discarded, or the other way around.
-    """
+    """Discards uploads that will never complete and albums whose retention
+    window has run out, with the objects either left behind. Two independent
+    passes, so a failure in one never stops the other."""
     await _discard_expired_uploads()
     await _discard_expired_albums()
 
 
 async def _discard_expired_uploads() -> None:
-    """Rows are deleted and committed first, exactly like every other
-    delete in this project (D6): the object for a row deleted here that
-    never had one simply isn't found, which `delete_objects` treats as
-    nothing to do, not an error.
-    """
+    """Rows are deleted and committed first. An object that never existed is
+    simply not found, which `delete_objects` treats as nothing to do."""
     async with transaction() as connection:
         expired = await photos_repository.expired_pending_photo_ids(connection)
         await photos_repository.delete_photos_by_id(
@@ -75,10 +62,8 @@ async def _discard_expired_uploads() -> None:
 
 
 async def _discard_expired_albums() -> None:
-    """The same ordering as `_discard_expired_uploads` (D6, D3 in
-    album-retention's design): the albums and their photos are gone
-    from the database, committed, before their objects are asked for.
-    """
+    """The same ordering as `_discard_expired_uploads`: committed first,
+    objects after."""
     async with transaction() as connection:
         photo_keys = await albums_repository.delete_expired_albums_returning_photo_keys(connection)
 
@@ -92,14 +77,9 @@ async def _discard_expired_albums() -> None:
 
 
 async def check_missing(*, provider: Provider) -> list[str]:
-    """Every available photo's object key that `provider` doesn't have
-    yet (object-storage spec, D6): the check a migration runs before
-    switching the active provider, reusing the same query
-    `confirm_batch` already relies on -- `get_object` -- against a port
-    built for whichever provider is named, never the currently active
-    one, so running this never changes what the running application
-    actually serves from.
-    """
+    """Every object key `provider` is still missing. Built against a port
+    for the named provider, never the active one, so running this never
+    changes what the application serves from."""
     target = build_storage_port(provider)
     async with transaction() as connection:
         rows = await photos_repository.all_available_photo_keys(connection)
@@ -135,17 +115,13 @@ def main(
     against: Annotated[
         Provider | None,
         typer.Option(
-            help=(
-                "Report objects missing at this provider instead of discarding "
-                "expired uploads (D6 in add-cloud-media-adapters)."
-            )
+            help=("Report objects missing at this provider instead of discarding expired uploads.")
         ),
     ] = None,
 ) -> None:
-    # psycopg3's async mode can't run on Windows's default event loop
-    # (src/loop.py's own docstring); reused here for the same reason
-    # uvicorn is given it explicitly, since this command has no uvicorn
-    # to do that for it.
+    # psycopg3's async mode can't run on Windows's default event loop; see
+    # src/loop.py. uvicorn is handed the same policy explicitly, and this
+    # command has no uvicorn to do it.
     asyncio.run(_run(against), loop_factory=loop_factory)
 
 

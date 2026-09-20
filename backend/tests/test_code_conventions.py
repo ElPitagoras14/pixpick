@@ -1,17 +1,16 @@
-"""Enforces the two code conventions no tool brings configured
-(code-conventions spec): the form of an internal import, and the fact
-that the markup the backend serves lives in a template rather than in a
-literal.
+"""Enforces the two code conventions no tool brings configured: the form of
+an internal import, and the fact that the markup the backend serves lives in
+a template rather than in a literal.
 
-The first one, in detail: a module living under the importing file's
-(code-conventions spec, D1/D3): a module living under the importing file's
-own package is imported relatively, so the form of an import follows
-from where its target is and from nothing else. Ruff's TID252 covers the other
-half -- a relative import never climbs to a parent -- so between the two
-the rule stops depending on someone noticing it during review.
+The first one, in detail: a module living under the importing file's: a
+module living under the importing file's own package is imported relatively,
+so the form of an import follows from where its target is and from nothing
+else. Ruff's TID252 covers the other half -- a relative import never climbs
+to a parent -- so between the two the rule stops depending on someone
+noticing it during review.
 
-It lives in the suite rather than in a standalone script for the same
-reason as the schema checks next to it: a script has to be remembered.
+It lives in the suite rather than in a standalone script for the same reason
+as the schema checks next to it: a script has to be remembered.
 """
 
 import ast
@@ -97,8 +96,8 @@ def _markup_literals(path: Path) -> list[tuple[int, str]]:
 
 
 def test_the_markup_the_backend_serves_does_not_live_in_the_code():
-    """A page's markup belongs in a template, where it has highlighting,
-    a formatter, and escaping by construction (code-conventions spec, D5).
+    """A page's markup belongs in a template, where it has highlighting, a
+    formatter, and escaping by construction.
     """
     offenders = [
         f"  {path.relative_to(_BACKEND).as_posix()}:{line}: a literal holding {marker!r}"

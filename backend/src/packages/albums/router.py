@@ -24,9 +24,9 @@ _Description = Annotated[str, Field(max_length=ALBUM_DESCRIPTION_MAX_LENGTH)] | 
 
 
 def _validate_title(value: str) -> str:
-    """Shared by create and rename (album-management spec): a value made
-    only of whitespace carries no content and SHALL be rejected exactly
-    like an absent one, naming the same field either way.
+    """Shared by create and rename: a value made only of whitespace carries
+    no content and SHALL be rejected exactly like an absent one, naming the
+    same field either way.
     """
     if not value.strip():
         raise ValueError("title is required")
@@ -100,7 +100,7 @@ async def delete_album(
 ) -> Envelope[None]:
     # Deliberately not `Depends(get_connection)`: deleting an album also
     # deletes its photos' objects, a network call that SHALL happen only
-    # once the row deletion has already committed (D6) -- see
+    # once the row deletion has already committed -- see
     # `service.delete_album`.
     await service.delete_album(album_id=album_id, user_id=user.id)
     return Envelope(data=None)

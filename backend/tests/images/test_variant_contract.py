@@ -1,11 +1,10 @@
 """End-to-end confirmation that the addresses `ImgproxyAdapter` builds
-actually resolve through nginx (image-delivery spec), against the
-real transformer and storage this local environment provides.
+actually resolve through nginx, against the real transformer and storage
+this local environment provides.
 
-Requires the local environment already running with at least
-`postgres storage transformer nginx` up:
-    docker compose -f compose.dev.yaml up -d \\
-        postgres storage transformer nginx
+Requires the local environment already running with at least `postgres
+storage transformer nginx` up: docker compose -f compose.dev.yaml up -d \\
+postgres storage transformer nginx
 """
 
 import base64
@@ -58,8 +57,8 @@ def _direct_client():
 @pytest.fixture
 def uploaded_object() -> Iterator[str]:
     """A real object already sitting in the storage -- test setup that
-    bypasses `StoragePort` on purpose, the same way a browser bypasses
-    the backend entirely when it writes directly (D2, D3)."""
+    bypasses `StoragePort` on purpose, the same way a browser bypasses the
+    backend entirely when it writes directly."""
     key = f"albums/contract-test/{uuid.uuid4()}"
     client = _direct_client()
     client.put_object(
@@ -176,10 +175,10 @@ def uploaded_wide_object() -> Iterator[str]:
 
 
 def test_the_viewer_variant_arrives_at_its_ceiling_without_cropping(uploaded_wide_object):
-    """Task 1.2 (photo-viewer spec): the address the gallery now carries
-    resolves through nginx to the largest variant -- longest side at the
-    catalog's own ceiling, and the original's proportion intact, which is
-    what says it was fitted and not cropped."""
+    """The address the gallery now carries resolves through nginx to the
+    largest variant -- longest side at the catalog's own ceiling, and the
+    original's proportion intact, which is what says it was fitted and not
+    cropped."""
     spec = CATALOG[Variant.VIEWER]
     url = image_port.variant_url(object_key=uploaded_wide_object, variant=Variant.VIEWER)
 
@@ -195,8 +194,8 @@ def test_the_viewer_variant_arrives_at_its_ceiling_without_cropping(uploaded_wid
 
 
 def test_the_viewer_variant_never_enlarges_a_smaller_original(uploaded_object):
-    """Task 1.2: the ceiling is a ceiling, not a target -- an original
-    below it comes back at its own size, not blown up to 2048."""
+    """The ceiling is a ceiling, not a target -- an original below it comes
+    back at its own size, not blown up to 2048."""
     url = image_port.variant_url(object_key=uploaded_object, variant=Variant.VIEWER)
 
     response = httpx.get(url, timeout=30)
@@ -209,8 +208,8 @@ def test_the_viewer_variant_never_enlarges_a_smaller_original(uploaded_object):
 def uploaded_oversized_original() -> Iterator[str]:
     """A real original above the transformer's own fixed ceiling
     (IMGPROXY_MAX_SRC_RESOLUTION in compose.yaml/compose.dev.yaml, 40
-    megapixels): solid color, so the compressed file itself stays small
-    even at this pixel count (task 6.2)."""
+    megapixels): solid color, so the compressed file itself stays small even
+    at this pixel count."""
     key = f"albums/contract-test/{uuid.uuid4()}"
     client = _direct_client()
     client.put_object(
@@ -226,9 +225,9 @@ def uploaded_oversized_original() -> Iterator[str]:
 def test_an_original_over_the_resolution_ceiling_is_rejected_without_processing(
     uploaded_oversized_original,
 ):
-    """Task 6.2: the transformer's own IMGPROXY_MAX_SRC_RESOLUTION rejects
-    an original above it before producing anything, regardless of what
-    the catalog's own variant specs ask for."""
+    """The transformer's own IMGPROXY_MAX_SRC_RESOLUTION rejects an original
+    above it before producing anything, regardless of what the catalog's own
+    variant specs ask for."""
     url = image_port.variant_url(object_key=uploaded_oversized_original, variant=Variant.THUMBNAIL)
 
     response = httpx.get(url, timeout=30)
@@ -237,10 +236,10 @@ def test_an_original_over_the_resolution_ceiling_is_rejected_without_processing(
 
 
 def test_reading_outside_the_declared_prefix_is_rejected(uploaded_object):
-    """Task 6.2: IMGPROXY_ALLOWED_SOURCES scopes the transformer to the
-    albums/ prefix -- a validly-signed address for an object outside it
-    is still rejected, by the transformer itself rather than by the
-    signature."""
+    """IMGPROXY_ALLOWED_SOURCES scopes the transformer to the albums/ prefix
+    -- a validly-signed address for an object outside it is still rejected,
+    by the transformer itself rather than by the signature.
+    """
     outside_key = uploaded_object.replace("albums/contract-test/", "outside/", 1)
     url = image_port.variant_url(object_key=outside_key, variant=Variant.THUMBNAIL)
 

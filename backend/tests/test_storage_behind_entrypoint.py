@@ -1,13 +1,13 @@
-"""Real stack only (object-storage spec, local-environment spec, tasks
-3.1-3.6): requires `docker compose -f compose.dev.yaml up -d --build`
-already running with STORAGE_PROVIDER=local, IMAGE_PROVIDER=local, and
-STORAGE_PUBLIC_URL pointing at nginx's own storage hostname (.env.example
-documents the default: http://storage.localhost:${NGINX_PORT}).
+"""Real stack only: requires `docker compose -f compose.dev.yaml up -d
+--build` already running with STORAGE_PROVIDER=local, IMAGE_PROVIDER=local,
+and STORAGE_PUBLIC_URL pointing at nginx's own storage hostname
+(.env.example documents the default:
+http://storage.localhost:${NGINX_PORT}).
 
-Exercised over real HTTP against the containers, not through Python: what
-is under test is nginx's own storage server block and the browser-facing
-address the backend hands out, neither reachable by importing this
-project's code.
+Exercised over real HTTP against the containers, not through Python: what is
+under test is nginx's own storage server block and the browser-facing
+address the backend hands out, neither reachable by importing this project's
+code.
 """
 
 import base64
@@ -33,19 +33,18 @@ _ONE_PIXEL_PNG = base64.b64decode(
 
 
 async def _log_in() -> str:
-    """The real local-provider HTTP cycle (session-management spec), not
-    the DB-shortcut `tests/authhelpers.py` uses: this test runs outside
-    the app's own process, against the real running containers, so there
-    is no shared connection to seed a session through directly.
+    """The real local-provider HTTP cycle, not the DB-shortcut
+    `tests/authhelpers.py` uses: this test runs outside the app's own
+    process, against the real running containers, so there is no shared
+    connection to seed a session through directly.
 
-    Returns the raw session token rather than leaving it in a client's
-    own cookie jar: a real, independently reproduced backend behavior
-    (unrelated to this change, tracked separately) intermittently drops
-    an otherwise-valid session when the very next request reuses the
-    same keep-alive connection a redirect just answered on -- the
-    database always has the right row, confirmed directly, so a fresh
-    connection for what comes after this login is the reliable way to
-    carry it forward.
+    Returns the raw session token rather than leaving it in a client's own
+    cookie jar: a real, independently reproduced backend behavior (unrelated
+    to this change, tracked separately) intermittently drops an
+    otherwise-valid session when the very next request reuses the same
+    keep-alive connection a redirect just answered on -- the database always
+    has the right row, confirmed directly, so a fresh connection for what
+    comes after this login is the reliable way to carry it forward.
     """
     async with httpx.AsyncClient(follow_redirects=False) as client:
         login = await client.get(f"{_BASE_URL}/api/auth/login", params={"returnTo": "/"})
@@ -66,9 +65,9 @@ async def _log_in() -> str:
 
 
 async def test_the_storage_hostname_routes_through_nginx_to_the_real_storage(running_stack):
-    """Task 3.1: a request through the storage hostname reaches the real
-    storage -- MinIO's own AccessDenied, not the frontend's catch-all or
-    a gateway error -- with neither the path nor the Host rewritten."""
+    """A request through the storage hostname reaches the real storage --
+    MinIO's own AccessDenied, not the frontend's catch-all or a gateway
+    error -- with neither the path nor the Host rewritten."""
     async with httpx.AsyncClient(follow_redirects=False) as client:
         response = await client.get(f"{_BASE_URL}/pixpick", headers={"Host": _STORAGE_HOST})
     assert response.status_code in (403, 404)
@@ -76,10 +75,10 @@ async def test_the_storage_hostname_routes_through_nginx_to_the_real_storage(run
 
 
 async def test_a_grant_and_full_upload_cycle_works_through_the_entry_point(running_stack):
-    """Tasks 3.1-3.3: the full flow a browser performs -- ask for a
-    grant, PUT the object straight to the address the grant carries (now
-    the entry point's own storage hostname, path-style addressed, task
-    3.2), and confirm it -- works end to end with the environment up."""
+    """The full flow a browser performs -- ask for a grant, PUT the object
+    straight to the address the grant carries (the entry point's own
+    storage hostname, path-style addressed), and confirm it -- works end to
+    end with the environment up."""
     session_token = await _log_in()
     async with httpx.AsyncClient(
         follow_redirects=False, cookies={"session": session_token}
@@ -131,9 +130,9 @@ async def test_a_grant_and_full_upload_cycle_works_through_the_entry_point(runni
 
 
 async def test_a_body_over_the_maximum_is_rejected_before_reaching_storage(running_stack):
-    """Task 3.4: a body above the entry point's own cap fails there --
-    413, never reaching the storage -- instead of at the application,
-    which validates only what the client declared, not what it wrote."""
+    """A body above the entry point's own cap fails there -- 413, never
+    reaching the storage -- instead of at the application, which validates
+    only what the client declared, not what it wrote."""
     oversized = b"0" * (21 * 1024 * 1024 + 1)
     async with httpx.AsyncClient(follow_redirects=False, timeout=30) as client:
         response = await client.put(
@@ -168,8 +167,8 @@ async def test_a_body_within_the_maximum_reaches_storage(running_stack):
 
 
 async def test_the_storage_accepts_the_applications_origin_and_rejects_another(running_stack):
-    """Task 3.6: CORS on the storage is scoped to the application's own
-    origin, not the storage's own hostname or an arbitrary one."""
+    """CORS on the storage is scoped to the application's own origin, not
+    the storage's own hostname or an arbitrary one."""
     # MINIO_ALLOWED_ORIGINS (.env.example) lists this origin literally --
     # CORS matches Origin as an exact string, so this has to be the same
     # "localhost" spelling configured there, unlike _BASE_URL above,
@@ -202,9 +201,9 @@ async def test_the_storage_accepts_the_applications_origin_and_rejects_another(r
 
 
 async def test_the_storage_console_is_disabled_while_the_api_keeps_working(running_stack):
-    """Task 6.1: no path on the storage's own address ever answers with
-    the console's HTML -- only the S3 API's own XML -- and the API keeps
-    working normally."""
+    """No path on the storage's own address ever answers with the console's
+    HTML -- only the S3 API's own XML -- and the API keeps working normally.
+    """
     async with httpx.AsyncClient(follow_redirects=False) as client:
         response = await client.get(
             f"{_BASE_URL}/", headers={"Host": _STORAGE_HOST, "Accept": "text/html"}

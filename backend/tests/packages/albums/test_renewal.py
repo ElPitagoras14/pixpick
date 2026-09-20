@@ -1,6 +1,6 @@
-"""album-retention spec: renewing the plazo is a consequence only of a
-photo becoming available. Every other action a person can take on an
-album or its photos SHALL NOT move it.
+"""Renewing the retention window is a consequence only of a photo becoming available.
+Every other action a person can take on an album or its photos SHALL NOT
+move it.
 """
 
 from src.database.client import fetch_val
@@ -19,7 +19,7 @@ async def _renewed_at(connection, album_id):
     )
 
 
-async def test_rating_does_not_renew_the_plazo(connection):
+async def test_rating_does_not_renew_the_retention_window(connection):
     owner = await create_user(connection)
     rater = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -34,7 +34,7 @@ async def test_rating_does_not_renew_the_plazo(connection):
     assert await _renewed_at(connection, album.id) == before
 
 
-async def test_sharing_and_revoking_do_not_renew_the_plazo(connection):
+async def test_sharing_and_revoking_do_not_renew_the_retention_window(connection):
     owner = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)
     before = await _renewed_at(connection, album.id)
@@ -46,7 +46,7 @@ async def test_sharing_and_revoking_do_not_renew_the_plazo(connection):
     assert await _renewed_at(connection, album.id) == before
 
 
-async def test_renaming_does_not_renew_the_plazo(connection):
+async def test_renaming_does_not_renew_the_retention_window(connection):
     owner = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id, title="Old")
     before = await _renewed_at(connection, album.id)
@@ -58,9 +58,9 @@ async def test_renaming_does_not_renew_the_plazo(connection):
     assert await _renewed_at(connection, album.id) == before
 
 
-async def test_deleting_photos_does_not_renew_the_plazo(connection):
-    """Includes the last photo the album had, per the spec's own
-    wording -- deleting down to none is still not a move of the plazo.
+async def test_deleting_photos_does_not_renew_the_retention_window(connection):
+    """Includes the last photo the album had, per the
+    wording -- deleting down to none is still not a move of the retention window.
     """
     owner = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -78,10 +78,9 @@ async def test_deleting_photos_does_not_renew_the_plazo(connection):
     assert await _renewed_at(connection, album.id) == before
 
 
-async def test_requesting_an_upload_grant_does_not_renew_the_plazo(connection):
-    """Only the photo that *becomes available* renews it (D4) -- the
-    permission requested to upload it, whether or not it's ever
-    completed, never does.
+async def test_requesting_an_upload_grant_does_not_renew_the_retention_window(connection):
+    """Only the photo that *becomes available* renews it -- the permission
+    requested to upload it, whether or not it's ever completed, never does.
     """
     owner = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)

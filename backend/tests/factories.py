@@ -1,7 +1,7 @@
-"""Shared constructors for the entities this project has (backend-testing
-spec): a test declares only the fields its verification involves, and the
-rest take valid defaults, so a new required column is absorbed here once
-instead of in every test that builds a user or a session.
+"""Shared constructors for the entities this project has: a test declares
+only the fields its verification involves, and the rest take valid defaults,
+so a new required column is absorbed here once instead of in every test that
+builds a user or a session.
 """
 
 import secrets
@@ -80,9 +80,9 @@ async def create_session(
     token: str | None = None,
     expires_at: datetime | None = None,
 ) -> tuple[SessionRow, str]:
-    """Returns the created row alongside the raw token: the table only
-    ever stores its hash (session-management spec), so a test that needs
-    to present the session as a cookie has nowhere else to get it from.
+    """Returns the created row alongside the raw token: the table only ever
+    stores its hash, so a test that needs to present the session as a cookie
+    has nowhere else to get it from.
     """
     token = token or secrets.token_urlsafe(32)
     expires_at = expires_at or (datetime.now(UTC) + DEFAULT_SESSION_LIFETIME)
@@ -112,15 +112,14 @@ async def create_album(
     description: str | None = None,
     renewed_at: datetime | None = None,
 ) -> AlbumRow:
-    """Also makes `owner_id` a member (album-sharing spec: creating an
-    album does this in production too), so a test that only cares about
-    ownership never has to declare the membership its own invariants
-    already assume.
+    """Also makes `owner_id` a member (creating an album does this in
+    production too), so a test that only cares about ownership never has to
+    declare the membership its own invariants already assume.
 
     `renewed_at` defaults to the column's own `now()` default, like a
-    freshly created album; pass one in the past (album-retention spec)
-    to build an album that has already expired under the configured
-    plazo, without needing to wait for one or fake the clock.
+    freshly created album; pass one in the past to build an album that has
+    already expired under the configured retention window, without needing to wait for
+    one or fake the clock.
     """
     row = await fetch_one(
         connection,
@@ -228,9 +227,8 @@ async def create_share_token(
 
 
 async def create_membership(connection: AsyncConnection, *, album_id: UUID, user_id: UUID) -> None:
-    """Idempotent, like the repository function it mirrors (album-sharing
-    spec): declaring the same membership twice in a test's setup is
-    harmless."""
+    """Idempotent, like the repository function it mirrors: declaring the
+    same membership twice in a test's setup is harmless."""
     await write(
         connection,
         """

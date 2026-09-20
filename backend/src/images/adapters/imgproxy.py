@@ -40,19 +40,18 @@ def _processing_options(variant: Variant) -> str:
 
 
 class ImgproxyAdapter:
-    """Builds and signs imgproxy addresses (D6). Never calls imgproxy or
-    the storage: the transformer reads the original from the storage on
-    its own the first time a given address is requested (D2).
+    """Builds and signs imgproxy addresses. Never calls imgproxy or the
+    storage: the transformer reads the original from the storage on its own
+    the first time a given address is requested.
     """
 
     def variant_url(self, *, object_key: str, variant: Variant) -> str:
-        # The bucket comes from the active storage port itself (image-
-        # delivery spec, D10 in harden-local-profile's design), not a
-        # fixed provider's own config: MinIO's bucket named here while
-        # R2 is the one actually active would build an address that
-        # doesn't resolve, and the transformer's own combination guard
-        # (D10) is what makes that combination fail at startup instead
-        # of the first request for a variant.
+        # The bucket comes from the active storage port itself, not a fixed
+        # provider's own config: MinIO's bucket named here while R2 is the
+        # one actually active would build an address that doesn't resolve,
+        # and the transformer's own combination guard is what makes that
+        # combination fail at startup instead of the first request for a
+        # variant.
         source = f"s3://{storage_port.bucket}/{object_key}"
         encoded_source = _b64url(source.encode())
         path = f"/{_processing_options(variant)}/{encoded_source}.{FORMAT}"

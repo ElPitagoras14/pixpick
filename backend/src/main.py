@@ -15,28 +15,21 @@ from .storage.factory import storage_port
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # Not caught here: an unreachable database SHALL fail startup with an
-    # explicit error instead of letting the process serve requests that
-    # would fail against the database anyway (database-access spec).
+    # Not caught: an unreachable database fails startup explicitly instead
+    # of serving requests that would fail anyway.
     await check_connectivity()
-    # Not caught either (D1): the space the objects live in has to be
-    # there before the first request, and a storage that can't be left
-    # ready fails startup naming the problem instead of letting the first
-    # upload discover it (object-storage spec).
+    # Not caught either: a storage that can't be left ready fails startup
+    # naming the problem, rather than letting the first upload find it.
     await storage_port.ensure_ready()
     yield
     await dispose_engine()
 
 
-# The only peer that ever connects to this process in containers mode is
-# nginx, itself a member of the "pixpick" network (request-throttling spec,
-# D4) -- so this is the one range trusted to declare a client's real
-# address via X-Forwarded-For/X-Forwarded-Proto, the same trust nginx
-# itself extends to the platform's proxy (nginx/nginx.conf). Fixed to
-# compose.yaml/compose.dev.yaml's own `ip_range` for that network: an
-# internal wiring detail hardcoded on both sides, not an environment
-# difference. Native mode never runs nginx in front of this process at
-# all, so the value is unused there.
+# In containers the only peer that connects to this process is nginx, so
+# this is the one range trusted to declare a client's address through
+# X-Forwarded-For. It has to stay equal to the `ip_range` the compose files
+# give that network, and to nginx/nginx.conf.template's own
+# `set_real_ip_from`. Unused in native mode, where nothing sits in front.
 _TRUSTED_PROXY_NETWORK = "172.30.238.128/25"
 
 app = FastAPI(title="pixpick", lifespan=lifespan)
@@ -47,18 +40,12 @@ app.include_router(api_router)
 logger.info(f"pixpick backend starting in {settings.environment} mode")
 
 if __name__ == "__main__":
-    # Runs uvicorn itself, instead of the `uvicorn` CLI, so this can pass
-    # `loop_factory` as the actual callable it already imported rather
-    # than a dotted path for uvicorn to resolve on its own -- the one way
-    # to hand it a loop compatible with psycopg3's async mode on Windows
-    # (src/loop.py) without a `--loop` flag on the command line. `app` has
-    # to travel as the same import string uvicorn's own CLI would use,
-    # and not this module's own `app` object, exactly when reload is on:
-    # reload respawns worker processes that each need to import it fresh.
-    #
-    # Reload follows `ENVIRONMENT` rather than a CLI flag: the same
-    # command works in every environment, and there's no flag to forget
-    # -- or to leave on by accident outside development.
+    # uvicorn is run here rather than through its CLI so `loop_factory` can
+    # travel as the callable itself -- the only way to hand it a loop
+    # compatible with psycopg3 on Windows (src/loop.py) without a `--loop`
+    # flag. `app` travels as an import string, not this module's object,
+    # because reload respawns workers that each import it fresh. Reload
+    # follows `ENVIRONMENT`, so there is no flag to leave on by accident.
     reload = settings.environment == "development"
     uvicorn.run(
         "src.main:app" if reload else app,

@@ -3,9 +3,8 @@
 # for the test database, or a deployment with prebuilt artifacts) does not
 # need the repository checked out on the machine that runs it.
 #
-# The version is pinned and must stay identical everywhere it is referenced
-# (database-migrations spec); after changing it here, update it in every
-# other place it appears:
+# The version is pinned and has to stay identical everywhere it appears.
+# After changing it here, update it in:
 #   - backend/tests/conftest.py (DBMATE_IMAGE, migrates the test database)
 #   - README.md (documents this version for the local dbmate CLI)
 FROM ghcr.io/amacneil/dbmate:2.35.1

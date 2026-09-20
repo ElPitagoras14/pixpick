@@ -114,9 +114,9 @@ async def test_the_owner_can_view_their_album(client, connection):
 async def test_the_album_response_carries_the_instant_it_expires_not_rendered_text(
     client, connection, monkeypatch
 ):
-    """5.1: the backend sends the expiry as a timestamp, both in the
-    list and in the single album's own response, for the client to
-    turn into text -- never text itself (album-retention spec, D6).
+    """5.1: the backend sends the expiry as a timestamp, both in the list
+    and in the single album's own response, for the client to turn into text
+    -- never text itself.
     """
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     owner = await log_in(client, connection)
@@ -202,10 +202,10 @@ async def test_renaming_a_foreign_album_does_not_modify_it(client, connection):
 async def test_deleting_an_album_removes_it_and_its_photos_objects(
     client, committed_connection, fake_storage
 ):
-    """Delete opens its own transaction, separate from `client`'s (D6),
-    so setup for this one test has to actually commit -- see
-    `committed_connection` -- instead of relying on the rollback the
-    other tests in this file share.
+    """Delete opens its own transaction, separate from `client`'s, so setup
+    for this one test has to actually commit -- see `committed_connection`
+    -- instead of relying on the rollback the other tests in this file
+    share.
     """
     owner = await create_user(committed_connection)
     album = await create_album(committed_connection, owner_id=owner.id)
@@ -235,7 +235,7 @@ async def test_deleting_an_album_removes_it_and_its_photos_objects(
 async def test_a_failed_object_deletion_still_leaves_no_dangling_record(
     client, committed_connection, fake_storage, monkeypatch
 ):
-    """D6: the rows are gone the moment the DB transaction commits, before
+    """The rows are gone the moment the DB transaction commits, before
     storage is ever called -- so a failure to delete the object leaves an
     orphan in storage, never a row that points at nothing."""
     owner = await create_user(committed_connection)

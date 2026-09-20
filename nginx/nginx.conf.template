@@ -5,51 +5,40 @@
 # never re-resolves it again if the service later restarts with a new IP.
 resolver 127.0.0.11 valid=30s;
 
-# Bounded at two gigabytes and thirty days of inactivity (D12 in
-# add-media-ports-and-local-adapters): the arithmetic behind those two
-# numbers lives in that change's design. `use_temp_path=off` writes
-# straight into the cache's own directory tree instead of a separate
-# staging path, which is the one that matters on the volume this is
-# mounted on.
+# Bounded at two gigabytes and thirty days of inactivity.
+# `use_temp_path=off` writes straight into the cache's own directory tree
+# instead of a separate staging path, which is what matters on the volume
+# this is mounted on.
 proxy_cache_path /var/cache/nginx/images levels=1:2 keys_zone=images_cache:10m
 	max_size=2g inactive=30d use_temp_path=off;
 
-# The only peer that ever connects to this container directly is the
-# platform's own proxy, which joins the "pixpick" network instead of
-# reaching this service through a published port (compose.yaml, D7 in
-# add-local-environment) -- so this is the one address range this file's
-# server blocks trust to declare a client's real address (request-
-# throttling spec, D4). Declared once, outside any single `server{}`
-# block, so it covers the storage block below too. Fixed to
-# compose.yaml/compose.dev.yaml's own `ip_range` for the "pixpick"
-# network, not the whole subnet: that range leaves out the gateway
-# address, which is what a connection from outside the network -- the
-# host, through compose.dev.yaml's own published port -- arrives as, so a
-# request forged from there keeps $remote_addr as the connecting peer
-# instead of trusting whatever X-Forwarded-For it sent on its own (task
-# 2.3). An internal wiring detail hardcoded on both sides, not an
-# environment difference.
+# The only peer that connects to this container directly is the platform's
+# own proxy, which joins the "pixpick" network rather than reaching this
+# service through a published port, so this is the one address range these
+# server blocks trust to declare a client's real address. Declared outside
+# any `server{}` block, so it covers the storage block below too.
+#
+# This is compose.yaml/compose.dev.yaml's own `ip_range`, not the whole
+# subnet, and the two have to stay equal: the range leaves out the gateway
+# address, which is what a connection from outside the network arrives as,
+# so a request forged from there keeps $remote_addr as the connecting peer
+# instead of being trusted on the X-Forwarded-For it sent itself.
 set_real_ip_from 172.30.238.128/25;
 real_ip_header X-Forwarded-For;
 
-# Rate limiting and connection limiting, by client address, applied
-# before anything reaches the backend (request-throttling spec, D3):
-# a general ceiling over the whole API space, and a stricter one over
-# granting uploads specifically, the operation that costs the most
-# (D3). Fixed values, not substituted from the environment (simplify-
-# rate-limit-config): none of them varied by deployment in practice, and
-# whoever needs a different ceiling in development edits the numbers
-# below directly instead of toggling them off by configuration.
+# Rate and connection limiting by client address, applied before anything
+# reaches the backend: a general ceiling over the API, and a stricter one
+# over granting uploads, the operation that costs the most. Fixed here,
+# not substituted from the environment -- edit the numbers to lift a
+# ceiling during development.
 limit_req_zone $binary_remote_addr zone=api_rate:10m rate=600r/m;
 limit_req_zone $binary_remote_addr zone=grants_rate:10m rate=30r/m;
 limit_conn_zone $binary_remote_addr zone=api_conn:10m;
 
-# 429, not the default 503 (request-throttling spec, api-conventions
-# spec): a status of its own for what this file rejects by itself,
+# 429, not the default 503: a status of its own for what this file rejects,
 # distinct from the 503 the backend answers with for its own capacity
-# problem (task 4.6) -- `proxy_intercept_errors` stays off (the default),
-# so that 503, proxied straight through, is never touched by the
-# `error_page` below.
+# problem. `proxy_intercept_errors` stays off, so that 503 is proxied
+# through untouched by the `error_page` below.
 limit_req_status 429;
 limit_conn_status 429;
 
@@ -57,10 +46,9 @@ server {
 	listen 80;
 	server_name _;
 
-	# The API space is proxied byte-for-byte (D2): no URI after the upstream
-	# in `proxy_pass` means nginx forwards the original request URI
-	# unchanged, prefix included, so the backend sees exactly what the
-	# browser sent.
+	# Proxied byte-for-byte: no URI after the upstream in `proxy_pass` means
+	# nginx forwards the original request URI unchanged, prefix included, so
+	# the backend sees exactly what the browser sent.
 	location /api/ {
 		limit_req zone=api_rate burst=50 nodelay;
 		limit_conn api_conn 20;
@@ -75,18 +63,16 @@ server {
 
 		# No try_files, no error_page fallback to the SPA here: a backend
 		# that isn't responding must surface as a gateway error, never as
-		# the app's HTML with a 200 (D3).
+		# the app's HTML with a 200.
 	}
 
-	# Granting uploads costs the most of any API operation -- it's what
-	# reserves quota and mints a storage credential -- so it gets its own,
-	# stricter zone on top of the general one above (request-throttling
-	# spec, D3, task 4.2): a client exhausting this one still gets every
-	# other API call served normally, because the two zones count
-	# separately. Matched by regex, which nginx checks against and prefers
-	# over the plain-prefix /api/ location above whenever it matches
-	# (no `^~` on that one), so this location's own directives apply
-	# instead of -- not in addition to -- an equivalent duplicate here.
+	# Granting an upload reserves quota and mints a storage credential, so it
+	# gets its own stricter zone on top of the general one: a client
+	# exhausting this one still gets every other API call served, because
+	# the two zones count separately. Matched by regex, which nginx prefers
+	# over the plain-prefix /api/ location above whenever it matches (no
+	# `^~` on that one), so these directives apply instead of -- not on top
+	# of -- that location's.
 	location ~ ^/api/albums/[^/]+/photos/grants$ {
 		limit_req zone=api_rate burst=50 nodelay;
 		limit_req zone=grants_rate burst=5 nodelay;
@@ -101,29 +87,23 @@ server {
 		proxy_set_header X-Forwarded-Proto $scheme;
 	}
 
-	# What a rejection from either zone above answers with (api-
-	# conventions spec, task 4.3): the same envelope shape every other
-	# error uses, so the client tells this apart from a validation
-	# failure or a fallen-over backend by the code and the retry-after
-	# alone, never by a different body shape. nginx can't reach the
-	# backend's own `error_envelope()`, so this is the same JSON written
-	# out by hand -- camelCase, `data` and `error` both present, `error`
-	# holding exactly what a null field looks like once serialized.
+	# What a rejection from either zone answers with: the same envelope shape
+	# every other error uses, so a client tells this apart by the code and
+	# the retry-after, never by a different body. nginx can't reach the
+	# backend's own `error_envelope()`, so this is that JSON written out by
+	# hand and has to keep matching it.
 	location @rate_limited {
 		default_type application/json;
 		add_header Retry-After 5 always;
 		return 429 '{"data":null,"error":{"code":"rate_limited","message":"too many requests; please retry shortly","field":null,"requestId":null,"details":null,"retryAfterSeconds":5}}';
 	}
 
-	# The images space (image-delivery spec): proxied to the transformer,
-	# with the cache the transformer itself has no notion of. Routing and
-	# caching are this service's job, never the frontend's own nginx (a
-	# second, unrelated nginx that only serves the frontend's static
-	# files, per D1 in add-local-environment) -- that file has no idea
-	# this location exists, so there's no directive that could end up
-	# duplicated between the two (task 2.6).
+	# Proxied to the transformer, with the cache the transformer has no
+	# notion of. Routing and caching are this service's job, never the
+	# frontend's own nginx -- a second, unrelated one that only serves
+	# static files and has no idea this location exists.
 	location /images/ {
-		# Unlike /api (D2), stripped before forwarding: imgproxy owns a
+		# Unlike /api, stripped before forwarding: imgproxy owns a
 		# fixed URL vocabulary rooted at "/" that it doesn't know how to
 		# mount under a prefix, unlike our own backend, which we control
 		# and mounted under "/api" on purpose. Signing an address
@@ -147,8 +127,8 @@ server {
 		proxy_cache images_cache;
 		proxy_cache_key $uri;
 		# Every variant address is immutable once produced -- a definition
-		# change produces a new address instead of reusing this one (D7) --
-		# so a long freshness window costs nothing and saves a transform.
+		# change produces a new address instead of reusing this one -- so a
+		# long freshness window costs nothing and saves a transform.
 		proxy_cache_valid 200 30d;
 		# Collapses simultaneous requests for the same not-yet-produced
 		# variant into a single upstream request; the rest wait for it and
@@ -162,7 +142,7 @@ server {
 		add_header X-Cache-Status $upstream_cache_status always;
 
 		# No try_files, no error_page fallback to the SPA here, for the
-		# same reason the API space has none (D3): a transformer that isn't
+		# same reason the API space has none: a transformer that isn't
 		# responding, or an object that doesn't exist, must surface as an
 		# error, never as the app's HTML with a 200.
 	}
@@ -177,18 +157,13 @@ server {
 	}
 }
 
-# The storage's own origin (object-storage spec, local-environment spec,
-# D1 in harden-local-profile's design): a separate server block, matched
-# by its own hostname instead of a path, because the grant's SigV4
-# signature covers the Host the browser sent and the path it requested --
-# rewriting either would invalidate it. `server_name` is substituted at
-# container start (entrypoint.sh) from STORAGE_PUBLIC_URL, the same value
-# compose.yaml/compose.dev.yaml hand the backend as MINIO_BROWSER_ENDPOINT,
-# so the two always name the same hostname -- a real deployment behind a
-# platform proxy names its own domain there, and one reached by a bare
-# private address without any domain of its own names an sslip.io/nip.io
-# hostname instead (README.md), which still resolves to that same address
-# with no DNS of its own to run.
+# The storage's own origin: a separate server block matched by hostname
+# instead of by path, because the grant's SigV4 signature covers the Host
+# the browser sent and the path it requested, and rewriting either would
+# invalidate it. `server_name` is substituted at container start
+# (entrypoint.sh) from STORAGE_PUBLIC_URL, the same value the backend
+# receives as MINIO_BROWSER_ENDPOINT, so the two always name the same
+# hostname.
 server {
 	listen 80;
 	server_name ${STORAGE_PUBLIC_HOSTNAME};
@@ -196,7 +171,7 @@ server {
 	location / {
 		set $storage_upstream storage:9000;
 		proxy_pass http://$storage_upstream;
-		# Host and the request URI travel untouched (D1): no rewrite, no
+		# Host and the request URI travel untouched: no rewrite, no
 		# URI on proxy_pass, exactly what a presigned request needs to
 		# still verify once it arrives. $http_host, not $host: the
 		# signature covers the exact Host the browser sent, port included
@@ -207,18 +182,16 @@ server {
 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 		proxy_set_header X-Forwarded-Proto $scheme;
 
-		# 20 MiB -- backend/src/packages/photos/config.py's own
-		# MAX_FILE_SIZE, the same maximum the upload grant already
-		# validates against (D2) -- plus a 1 MiB margin for whatever the
-		# upload protocol adds on top of the file's own bytes. The two
-		# limits have to change together: this is the first cap that acts
-		# on what's actually written, instead of what the client declared.
+		# backend/src/packages/photos/config.py's own MAX_FILE_SIZE, 20 MiB,
+		# plus a 1 MiB margin for what the upload protocol adds on top of
+		# the file's bytes. The two have to change together: this is the
+		# first cap that acts on what is actually written, rather than on
+		# what the client declared.
 		client_max_body_size 21m;
 
-		# nginx buffers a request to disk by default before forwarding it,
-		# which would mean writing every upload's bytes twice -- once into
-		# nginx's own buffer, once into the storage (D2). Off, it streams
-		# the body straight through as it arrives.
+		# nginx buffers a request to disk before forwarding it by default,
+		# which would write every upload's bytes twice. Off, it streams the
+		# body straight through as it arrives.
 		proxy_request_buffering off;
 	}
 }

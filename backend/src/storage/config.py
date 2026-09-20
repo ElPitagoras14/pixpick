@@ -11,12 +11,12 @@ class StorageSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     # Extended with each provider this project adds. An unrecognized value
-    # fails startup naming the accepted ones (object-storage spec) instead
-    # of surfacing on the first upload attempt. Everything below is
-    # grouped by provider and optional here -- only the group the active
-    # value names is required, enforced by the factory (same shape as
-    # `identity`'s own credentials) rather than by these types, since a
-    # `Literal` field can't say "required only for one value".
+    # fails startup naming the accepted ones instead of surfacing on the
+    # first upload attempt. Everything below is grouped by provider and
+    # optional here -- only the group the active value names is required,
+    # enforced by the factory (same shape as `identity`'s own credentials)
+    # rather than by these types, since a `Literal` field can't say
+    # "required only for one value".
     storage_provider: Literal["local", "r2"]
 
     # MinIO's own admin/root credentials, used for local development only
@@ -25,16 +25,15 @@ class StorageSettings(BaseSettings):
     minio_access_key_id: str | None = None
     minio_secret_access_key: str | None = None
 
-    # Defaults to "pixpick" (D4): the same bucket name everyone develops
-    # against unless they deliberately chose another one, so this never
-    # has to be filled in for the common case.
+    # Defaults to "pixpick": the same bucket name everyone develops against
+    # unless they deliberately chose another one, so this never has to be
+    # filled in for the common case.
     minio_bucket: str | None = "pixpick"
 
-    # Two addresses for the same storage (D4 in
-    # add-media-ports-and-local-adapters): the one the browser can reach,
+    # Two addresses for the same storage: the one the browser can reach,
     # used to sign upload grants, and the one the server reaches, used to
-    # query and delete objects -- genuinely two values for MinIO, unlike
-    # R2 below (D7 in add-cloud-media-adapters).
+    # query and delete objects -- genuinely two values for MinIO, unlike R2
+    # below.
     minio_browser_endpoint: str | None = None
     minio_server_endpoint: str | None = None
 
@@ -43,9 +42,9 @@ class StorageSettings(BaseSettings):
     r2_secret_access_key: str | None = None
     r2_bucket: str | None = None
 
-    # A single address, not two (D7): R2 is public from every side, so
-    # the browser and the server reach it the same way -- one field says
-    # so directly, instead of two that would always have to agree.
+    # A single address, not two: R2 is public from every side, so the
+    # browser and the server reach it the same way -- one field says so
+    # directly, instead of two that would always have to agree.
     r2_endpoint: str | None = None
 
 

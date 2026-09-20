@@ -1,12 +1,10 @@
 #!/bin/sh
 set -eu
 
-# Phase 1: validate every required variable is present before touching
-# anything, same as the frontend's own entrypoint (D3 in
-# harden-local-profile's design): envsubst alone can't be trusted for
-# this, since a missing variable just becomes an empty string. The list
-# is explicit here, not derived from the template, so adding a
-# placeholder without declaring it required is visible in review.
+# Checked before anything is substituted: envsubst turns a missing
+# variable into an empty string rather than failing. The list is explicit
+# rather than derived from the template, so adding a placeholder without
+# declaring it required shows up in review.
 required_vars="STORAGE_PUBLIC_URL"
 
 for var in $required_vars; do
@@ -29,11 +27,10 @@ if [ -z "$STORAGE_PUBLIC_HOSTNAME" ]; then
 fi
 export STORAGE_PUBLIC_HOSTNAME
 
-# Phase 2: substitute and start nginx. Restricting envsubst's variable list
-# keeps it from touching the file's own `$name`-shaped nginx variables
-# (`$remote_addr`, `$http_x_forwarded_for`, and the rest). The rate and
-# connection limits are fixed in the template itself (simplify-rate-
-# limit-config), so this is the only placeholder left to substitute.
+# Restricting envsubst's variable list keeps it from touching the
+# template's own `$name`-shaped nginx variables (`$remote_addr` and the
+# rest). The rate and connection limits are fixed in the template, so this
+# is the only placeholder left.
 envsubst '${STORAGE_PUBLIC_HOSTNAME}' \
 	< /etc/pixpick/nginx.conf.template \
 	> /etc/nginx/conf.d/default.conf

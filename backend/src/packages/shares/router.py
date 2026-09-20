@@ -11,9 +11,9 @@ from src.responses import Envelope
 from . import service
 from .responses import EnterShareResponse, ShareLinkResponse
 
-# Administering the link: generating, regenerating, revoking. Owner-only
-# (album-sharing spec) -- `get_owned_album` raises `ForbiddenError` for a
-# member who isn't the owner, `NotFoundError` for anyone else.
+# Administering the link: generating, regenerating, revoking. Owner-only --
+# `get_owned_album` raises `ForbiddenError` for a member who isn't the
+# owner, `NotFoundError` for anyone else.
 router = APIRouter(prefix="/albums/{album_id}/share")
 
 
@@ -44,11 +44,11 @@ async def revoke_share_link(
     return Envelope(data=None)
 
 
-# Entering with a token: a write, deliberately never a GET (D4) -- a
-# top-level navigation from another origin (a messaging app, a mail
-# client) carries the session cookie under SameSite=Lax, so if this were a
-# read, a bare link anywhere could enroll someone as a member without
-# their app ever choosing to.
+# Entering with a token: a write, deliberately never a GET -- a top-level
+# navigation from another origin (a messaging app, a mail client) carries
+# the session cookie under SameSite=Lax, so if this were a read, a bare link
+# anywhere could enroll someone as a member without their app ever choosing
+# to.
 enter_router = APIRouter(prefix="/shares")
 
 

@@ -4,11 +4,10 @@ from pydantic import BaseModel
 
 
 class ExternalIdentity(BaseModel):
-    """What a provider hands back once its code is exchanged
-    (identity-provider spec). `provider` and `provider_user_id` are
-    always present; the descriptive fields may be absent -- not every
-    provider sends all of them, and their absence never blocks signing
-    in.
+    """What a provider hands back once its code is exchanged. `provider` and
+    `provider_user_id` are always present; the descriptive fields may be
+    absent -- not every provider sends all of them, and their absence never
+    blocks signing in.
     """
 
     provider: str
@@ -19,18 +18,18 @@ class ExternalIdentity(BaseModel):
 
 
 class AuthPort(Protocol):
-    """The two operations any identity provider offers (identity-provider
-    spec). The rest of the application talks to this interface only,
-    never to a concrete provider -- swapping the active one changes no
-    endpoint and no consumer of the identity.
+    """The two operations any identity provider offers. The rest of the
+    application talks to this interface only, never to a concrete provider
+    -- swapping the active one changes no endpoint and no consumer of the
+    identity.
     """
 
     def authorization_url(self, *, state: str) -> str:
         """The address a person is sent to, to authenticate.
 
-        `state` travels through the provider unmodified and comes back
-        on the return leg (session-management spec): it's how the
-        return is matched to the login that started it.
+        `state` travels through the provider unmodified and comes back on
+        the return leg: it's how the return is matched to the login that
+        started it.
         """
         ...
 

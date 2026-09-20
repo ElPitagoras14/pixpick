@@ -17,14 +17,10 @@ async def get_owned_album(
     user: UserRecord = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> AlbumRecord:
-    """The declared way any endpoint -- in this package, or in `photos` and
-    `shares`, which import this same dependency -- requires an album the
-    caller *owns* (album-management spec, modified by add-share-and-swipe):
-    an album that doesn't exist and one the caller has no relation to at
-    all raise the same `NotFoundError`; one the caller can see as a member,
-    but doesn't own, raises `ForbiddenError` instead -- its existence is
-    already known to a member, so hiding it here protects nothing.
-    """
+    """How an endpoint requires an album the caller *owns*. A missing album
+    and one the caller has no relation to both raise `NotFoundError`; one
+    they can see as a member raises `ForbiddenError`, since hiding what a
+    member already knows exists protects nothing."""
     return await service.require_owned_album(connection, album_id=album_id, user_id=user.id)
 
 
@@ -33,13 +29,9 @@ async def get_accessible_album(
     user: UserRecord = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> AlbumDetailRow:
-    """The declared way any endpoint -- in this package, or in `photos` and
-    `ratings`, which import this same dependency -- requires an album the
-    caller can merely *see*: its owner, or any member (album-management
-    spec, modified by add-share-and-swipe). An album that doesn't exist
-    and one the caller has no relation to at all raise the same
-    `NotFoundError`.
-    """
+    """How an endpoint requires an album the caller can merely *see*: its
+    owner, or any member. A missing album and one they have no relation to
+    both raise `NotFoundError`."""
     album = await repository.get_accessible_album(connection, album_id=album_id, user_id=user.id)
     if album is None:
         raise NotFoundError()

@@ -8,9 +8,8 @@ from .schemas import ShareTokenRecord
 
 
 async def get_live_token(connection: AsyncConnection, *, album_id: UUID) -> ShareTokenRecord | None:
-    """The album's current live link, or `None` if it has none (D1): a
-    revoked row is not live, and an album has at most one live row at a
-    time (album-sharing spec).
+    """The album's current live link, or `None` if it has none: a revoked
+    row is not live, and an album has at most one live row at a time.
     """
     return await fetch_one(
         connection,
@@ -56,9 +55,9 @@ async def create_token(
 
 async def get_live_album_id_by_token(connection: AsyncConnection, *, token: str) -> UUID | None:
     """The album a token currently grants entry to, or `None` for a token
-    that's unknown, revoked, or well-formed but foreign to any album --
-    the three cases the album-sharing spec requires to answer identically,
-    since the caller can't tell them apart from this result.
+    that's unknown, revoked, or well-formed but foreign to any album. The
+    three answer identically on purpose: the caller can't tell them apart
+    from this result, and shouldn't be able to.
     """
     return await fetch_val_or_none(
         connection,

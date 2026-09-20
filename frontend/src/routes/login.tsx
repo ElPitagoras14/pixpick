@@ -16,9 +16,9 @@ export const Route = createFileRoute("/login")({
 function Login() {
 	const { returnTo } = Route.useSearch();
 
-	// A real, full-page navigation (not a fetch): the backend answers
-	// with a redirect into the active provider's own cycle, which this
-	// SPA has no part in (identity-provider spec).
+	// A real, full-page navigation (not a fetch): the backend answers with a
+	// redirect into the active provider's own cycle, which this SPA has no
+	// part in.
 	const loginUrl = new URL(
 		`${config.apiBaseUrl}/auth/login`,
 		window.location.origin,

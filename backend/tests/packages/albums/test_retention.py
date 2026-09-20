@@ -1,5 +1,5 @@
-"""album-retention spec: an album whose plazo has run out behaves as if
-it never existed, for every read the repository offers.
+"""An album whose retention window has run out behaves as if it never existed, for
+every read the repository offers.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -27,7 +27,9 @@ async def test_get_owned_album_is_none_for_an_expired_album(connection, monkeypa
     )
 
 
-async def test_get_owned_album_sees_an_album_still_within_its_plazo(connection, monkeypatch):
+async def test_get_owned_album_sees_an_album_still_within_its_retention_window(
+    connection, monkeypatch
+):
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     user = await create_user(connection)
     fresh = await create_album(
@@ -86,7 +88,7 @@ async def test_album_exists_is_true_for_a_fresh_album(connection):
     assert await repository.album_exists(connection, album_id=album.id) is True
 
 
-async def test_touch_renewed_at_restarts_the_plazo(connection, monkeypatch):
+async def test_touch_renewed_at_restarts_the_retention_window(connection, monkeypatch):
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     user = await create_user(connection)
     album = await create_album(
@@ -115,7 +117,7 @@ async def test_delete_owned_album_returning_photo_ids_is_none_for_an_expired_alb
     assert result is None
 
 
-async def test_a_new_album_without_photos_counts_its_plazo_from_its_creation(connection):
+async def test_a_new_album_without_photos_counts_its_retention_window_from_its_creation(connection):
     """3.3: with no photo ever confirmed, `renewed_at` never moves away
     from what `insert_album` -- the production path, not the factory's
     override -- gave it at creation.
@@ -132,11 +134,11 @@ async def test_a_new_album_without_photos_counts_its_plazo_from_its_creation(con
     assert abs((renewed_at - album.created_at).total_seconds()) < 1
 
 
-async def test_the_first_available_photo_moves_the_plazo(connection):
-    """3.3: an old `renewed_at` -- as if the album had sat with no
-    photo for a while -- is moved forward the moment its first photo
-    becomes available, the same transaction `photos.service.confirm_batch`
-    itself uses (D4).
+async def test_the_first_available_photo_moves_the_retention_window(connection):
+    """3.3: an old `renewed_at` -- as if the album had sat with no photo for
+    a while -- is moved forward the moment its first photo becomes
+    available, the same transaction `photos.service.confirm_batch` itself
+    uses.
     """
     user = await create_user(connection)
     old_renewed_at = datetime.now(UTC) - timedelta(days=10)
@@ -193,10 +195,10 @@ async def test_the_delay_before_the_cleanup_command_runs_has_no_observable_effec
 async def test_an_expired_album_frees_space_for_a_new_upload_before_any_cleanup(
     connection, monkeypatch
 ):
-    """6.2: an account sitting at its limit can grant again the moment
-    the album occupying that space expires -- no cleanup command has
-    to run first, since the account's usage is a read of `albums` like
-    any other and inherits the same condition (D5).
+    """6.2: an account sitting at its limit can grant again the moment the
+    album occupying that space expires -- no cleanup command has to run
+    first, since the account's usage is a read of `albums` like any other
+    and inherits the same condition.
     """
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     monkeypatch.setattr("src.packages.photos.service.photos_settings.account_max_bytes", 1_000)
@@ -227,13 +229,15 @@ async def test_an_expired_album_frees_space_for_a_new_upload_before_any_cleanup(
     assert len(after_expiry.granted) == 1
 
 
-async def test_lowering_the_plazo_expires_every_older_album_at_once(connection, monkeypatch):
-    """6.3: the plazo is read fresh on every query, never baked into a
-    row when it's created (D1) -- lowering it in the configuration
-    expires every album already older than the new value, all at
-    once, with no migration and no code change needed. `monkeypatch`
-    is what returns the value to its original one once this test
-    ends, the same effect the task asks to verify.
+async def test_lowering_the_retention_window_expires_every_older_album_at_once(
+    connection, monkeypatch
+):
+    """6.3: the retention window is read fresh on every query, never baked into a row
+    when it's created -- lowering it in the configuration expires every
+    album already older than the new value, all at once, with no migration
+    and no code change needed. `monkeypatch` is what returns the value to
+    its original one once this test ends, the same effect the task asks to
+    verify.
     """
     owner = await create_user(connection)
     ages_in_days = [10, 20, 40]

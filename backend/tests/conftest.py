@@ -24,8 +24,8 @@ load_dotenv()
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MIGRATIONS_DIR = _REPO_ROOT / "dbmate" / "migrations"
-# Keep in sync with dbmate/Dockerfile's FROM line (database-migrations spec:
-# every reference to the tool's version must name the same one).
+# Keep in sync with dbmate/Dockerfile's FROM line (every reference to the
+# tool's version must name the same one).
 _DBMATE_IMAGE = "ghcr.io/amacneil/dbmate:2.35.1"
 
 _POSTGRES_USER = os.environ["POSTGRES_USER"]
@@ -40,8 +40,8 @@ TEST_DATABASE_NAME = f"{_POSTGRES_DB}_test"
 
 
 def _require_test_database(name: str) -> None:
-    """Refuses to touch anything that isn't the test database (Risks: a
-    developer running the suite against the dev database by mistake)."""
+    """Refuses to touch anything that isn't the test database: running the
+    suite against the dev one by mistake would wipe it."""
     if name == _POSTGRES_DB or not name.endswith("_test"):
         raise RuntimeError(
             f"refusing to prepare the test suite against database {name!r}: "
@@ -71,7 +71,7 @@ def _create_database_if_missing(name: str) -> None:
 
 def _migrate(name: str) -> None:
     """Applies the project's migrations with the same pinned dbmate version
-    used everywhere else (D10)."""
+    used everywhere else."""
     _require_test_database(name)
     database_url = (
         f"postgres://{_POSTGRES_USER}:{_POSTGRES_PASSWORD}"
@@ -96,8 +96,8 @@ def _migrate(name: str) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Prepares the test database once, before any test runs (single
-    command, no manual steps -- backend-testing spec)."""
+    """Prepares the test database once, before any test runs: one command,
+    no manual steps."""
     _create_database_if_missing(TEST_DATABASE_NAME)
     _migrate(TEST_DATABASE_NAME)
 
@@ -108,8 +108,8 @@ def test_engine() -> AsyncEngine:
         f"postgresql+psycopg://{_POSTGRES_USER}:{_POSTGRES_PASSWORD}"
         f"@localhost:{_POSTGRES_PORT}/{TEST_DATABASE_NAME}"
     )
-    # A pool of its own, much smaller than the app's (D11): the suite runs
-    # one test at a time and has no reason to reserve twenty connections.
+    # A pool of its own, much smaller than the app's: the suite runs one
+    # test at a time and has no reason to reserve twenty connections.
     return create_async_engine(url, pool_size=2, max_overflow=3)
 
 
@@ -117,13 +117,13 @@ def test_engine() -> AsyncEngine:
 def _point_the_default_engine_at_the_test_database(test_engine, monkeypatch):
     """A handful of services open their own transaction through
     `database.utils.transaction()` instead of the per-request connection
-    (D6 in add-albums-and-upload: deleting a photo's object is a network
-    call, and a transaction that deletes its row SHALL fully commit --
-    releasing its pooled connection -- before that call, never hold it
-    open across the wait). Called with no explicit engine, as production
-    always calls it, that helper defaults to `database.client.engine`;
-    this points the same name at the test database for the duration of
-    every test, so that default is never the developer's own.
+    (deleting a photo's object is a network call, and a transaction that
+    deletes its row SHALL fully commit -- releasing its pooled connection --
+    before that call, never hold it open across the wait). Called with no
+    explicit engine, as production always calls it, that helper defaults to
+    `database.client.engine`; this points the same name at the test database
+    for the duration of every test, so that default is never the developer's
+    own.
     """
     monkeypatch.setattr("src.database.client.engine", test_engine)
 
@@ -161,16 +161,15 @@ def running_stack():
 @pytest.fixture
 def fake_storage(monkeypatch):
     """Swaps the real storage adapter for the in-memory double in both
-    packages that call it, so albums/photos tests never need MinIO up.
-    The contract suite (`tests/storage/`) is what verifies the fake
-    behaves like the real thing (D9, D10) -- these tests only rely on
-    that already being true.
+    packages that call it, so albums/photos tests never need MinIO up. The
+    contract suite (`tests/storage/`) is what verifies the fake behaves like
+    the real thing -- these tests only rely on that already being true.
 
     Also stubs out the warm-up task: a photo the fake storage marks
     available has no real object behind it, so warming its variant would
     only mean a real, slow round trip to nginx/imgproxy for something
-    guaranteed to 404. `tests/packages/photos/test_upload_integration.py`
-    is what actually exercises warming against the real stack (task 4.3).
+    guaranteed to 404. `tests/packages/photos/test_upload_integration.py` is
+    what actually exercises warming against the real stack.
     """
     from tests.fakes import FakeStoragePort
 
@@ -206,10 +205,9 @@ async def committed_connection(test_engine: AsyncEngine) -> AsyncIterator[AsyncC
 
 @pytest_asyncio.fixture
 async def connection(test_engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
-    """Opens a connection, starts a transaction, yields it, and always
-    rolls back on teardown (D9): nothing a test writes is visible to
-    another test, regardless of execution order, and nothing is left
-    behind to clean up.
+    """Opens a connection, starts a transaction, yields it, and always rolls
+    back on teardown: nothing a test writes is visible to another test,
+    regardless of execution order, and nothing is left behind to clean up.
     """
     async with test_engine.connect() as connection:
         transaction = await connection.begin()
@@ -221,13 +219,12 @@ async def connection(test_engine: AsyncEngine) -> AsyncIterator[AsyncConnection]
 
 @pytest_asyncio.fixture
 async def client(connection: AsyncConnection) -> AsyncIterator[TestClient]:
-    """An HTTP client against the real app, with `get_connection`
-    overridden to reuse this test's own rollback-only `connection`
-    instead of opening one against the dev database. Each request still
-    gets its own transaction boundary via a savepoint, mirroring
-    production's one-transaction-per-request shape (D3 in
-    add-backend-data-layer) while nesting inside the outer rollback that
-    undoes everything at teardown.
+    """An HTTP client against the real app, with `get_connection` overridden
+    to reuse this test's own rollback-only `connection` instead of opening
+    one against the dev database. Each request still gets its own
+    transaction boundary via a savepoint, mirroring production's
+    one-transaction-per-request shape while nesting inside the outer
+    rollback that undoes everything at teardown.
     """
 
     async def override_get_connection() -> AsyncIterator[AsyncConnection]:

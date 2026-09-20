@@ -7,26 +7,25 @@ import { cn } from "@/lib/utils";
 interface GalleryPhotoCardProps {
 	photo: GalleryPhoto;
 	onSetRating: (approved: boolean) => void;
-	/** Opens this photo in the viewer (photo-viewer spec). The rating
-	 * controls sit on top of the image and stop the tap themselves, so
-	 * rating from the grid never opens anything. */
+	/** Opens this photo in the viewer. The rating controls sit on top of the
+	 * image and stop the tap themselves, so rating from the grid never opens
+	 * anything. */
 	onOpen: () => void;
 	stats?: PhotoStats;
 	sizeBytes?: number;
 	onDelete?: () => void;
 }
 
-/** One photo of the gallery grid (rating-gallery spec): the thumbnail, a
- * rating indicator in one corner, and -- only when the caller passes
- * `stats` (the owner) -- the aggregate counts as a compact strip below
- * the image, never sharing a corner with the indicator above (Risks:
- * the two would otherwise compete for the same corner).
+/** One photo of the gallery grid: the thumbnail, a rating indicator in one
+ * corner, and -- only when the caller passes `stats` (the owner) -- the
+ * aggregate counts as a compact strip below the image, never sharing a
+ * corner with the indicator above, which the two would otherwise compete
+ * for.
  *
  * What the photo occupies joins that same strip rather than starting one
- * of its own (account-quota spec): it is owner-only for the same reason
- * the counts are, and it arrives from its own resource, so it is present
- * or absent independently of them.
- */
+ * of its own: it is owner-only for the same reason the counts are, and it
+ * arrives from its own resource, so it is present or absent independently
+ * of them. */
 export function GalleryPhotoCard({
 	photo,
 	onSetRating,
@@ -38,12 +37,11 @@ export function GalleryPhotoCard({
 	return (
 		<li className="flex flex-col gap-1">
 			<div className="group relative">
-				{/* Square, never the photo's own ratio (D7): the thumbnail
-				the backend serves is already a deliberate square crop, and
-				a container of any other shape cropped that square a second
-				time. With both square the fill crop has nothing left to
-				remove, and the grid comes out even. Seeing a photo
-				uncropped is what the viewer is for. */}
+				{/* Square, never the photo's own ratio: the thumbnail the backend
+				 * serves is already a deliberate square crop, and a container of any
+				 * other shape cropped that square a second time. With both square the
+				 * fill crop has nothing left to remove, and the grid comes out even.
+				 * Seeing a photo uncropped is what the viewer is for. */}
 				<button
 					type="button"
 					onClick={onOpen}
@@ -58,10 +56,10 @@ export function GalleryPhotoCard({
 					/>
 				</button>
 
-				{/* The rating indicator (task 3.3): one small widget in a
-				corner with three visible states -- neither button lit up is
-				"not rated yet", and it never reads like a rejection. Tapping
-				either button is how a rating changes from here (D6). */}
+				{/* The rating indicator: one small widget in a corner with three
+				 * visible states -- neither button lit up is "not rated yet", and it
+				 * never reads like a rejection. Tapping either button is how a rating
+				 * changes from here. */}
 				<div className="bg-background/80 absolute top-1.5 right-1.5 flex gap-0.5 rounded-full p-0.5">
 					<button
 						type="button"

@@ -27,13 +27,12 @@ const STATUS_LABEL: Record<UploadItemStatus, string> = {
 };
 
 /** The four outcomes a person scans for, which the queue's statuses
- * collapse into (D5). The group is what reads at a glance -- icon and
- * color, no text -- while each status keeps its own wording below it for
- * the detail. "busy" is its own outcome, not "failed" (request-
- * throttling spec, task 4.8): nothing about the file was wrong, the
- * instance just couldn't take it yet, so it reads as transient instead
- * of as a defect -- and, unlike "failed", the same retry is expected to
- * work once the wait is over instead of only maybe helping. */
+ * collapse into. The group is what reads at a glance -- icon and color, no
+ * text -- while each status keeps its own wording below it for the detail.
+ * "busy" is its own outcome, not "failed": nothing about the file was
+ * wrong, the instance just couldn't take it yet, so it reads as transient
+ * instead of as a defect -- and, unlike "failed", the same retry is
+ * expected to work once the wait is over instead of only maybe helping. */
 export type UploadOutcome = "running" | "done" | "busy" | "failed";
 
 const STATUS_OUTCOME: Record<UploadItemStatus, UploadOutcome> = {
@@ -75,10 +74,10 @@ const OUTCOME_TEXT_CLASS: Record<UploadOutcome, string> = {
 	failed: "text-destructive",
 };
 
-// D3: the browser's own truncation eats the end of a name, which is
-// exactly where the numbering a camera produces differs -- IMG_4821 from
-// IMG_4822. Splitting the name and letting only the head shrink keeps
-// the tail on screen at any width, with nothing to measure.
+// The browser's own truncation eats the end of a name, which is exactly
+// where the numbering a camera produces differs -- IMG_4821 from IMG_4822.
+// Splitting the name and letting only the head shrink keeps the tail on
+// screen at any width, with nothing to measure.
 const NAME_TAIL_LENGTH = 8;
 
 function splitName(name: string): { head: string; tail: string } {
@@ -94,22 +93,21 @@ interface UploadItemCardProps {
 	onRetry: () => void;
 }
 
-/** One file of the batch (D2): the card turns a queue item into what is
- * shown, so the route keeps only the file picker and the list and no
- * branch of this lives there -- the same reason the gallery grid and the
- * rating deck each have a card of their own.
+/** One file of the batch: the card turns a queue item into what is shown,
+ * so the route keeps only the file picker and the list and no branch of
+ * this lives there -- the same reason the gallery grid and the rating deck
+ * each have a card of their own.
  *
  * Its identity sits on the first line and the bar gets the whole width
  * below it, which is what gives the reason for a failure room to be read
- * in full, across two lines if it needs them.
- */
+ * in full, across two lines if it needs them. */
 export function UploadItemCard({ item, onRetry }: UploadItemCardProps) {
 	const outcome = STATUS_OUTCOME[item.status];
 	const { head, tail } = splitName(item.file.name);
-	// A transfer that fell over, a file that wasn't granted room, and one
-	// the instance couldn't take yet are the ones a person can do
-	// something about by asking again (task 4.8: retrying "busy" is
-	// expected to succeed once the wait is over, not just maybe help).
+	// A transfer that fell over, a file that wasn't granted room, and one the
+	// instance couldn't take yet are the ones a person can do something about
+	// by asking again (retrying "busy" is expected to succeed once the wait is
+	// over, not just maybe help).
 	const canRetry =
 		item.status === "failed" ||
 		item.status === "denied" ||

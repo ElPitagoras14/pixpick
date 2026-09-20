@@ -31,7 +31,7 @@ def _use_a_bucket_of_its_own(monkeypatch) -> str:
 
 
 def test_granting_an_upload_emits_no_network_request(monkeypatch):
-    """Signing is pure computation (D8): nothing opens a socket."""
+    """Signing is pure computation: nothing opens a socket."""
 
     def _forbidden_connect(*_args, **_kwargs):
         raise AssertionError("grant_upload must not open any connection")
@@ -68,8 +68,8 @@ async def test_an_unreachable_storage_surfaces_as_a_domain_error(monkeypatch):
 
 
 async def test_a_missing_space_is_created(monkeypatch):
-    """The provider the project runs itself owns its space (D2), so
-    startup creates it instead of failing."""
+    """The provider the project runs itself owns its space, so startup
+    creates it instead of failing."""
     bucket = _use_a_bucket_of_its_own(monkeypatch)
     probe = _probe_client()
     with pytest.raises(ClientError):

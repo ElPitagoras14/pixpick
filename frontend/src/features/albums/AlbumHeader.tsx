@@ -2,10 +2,10 @@ import type { Album } from "@/features/albums/api";
 import { remainingTimeLabel } from "@/features/albums/api";
 import type { AlbumStats } from "@/features/gallery/api";
 
-// Identity as a single column (album-management spec, design.md D6):
-// title, description, expiry, and the participation summary, in that
-// order. Receives everything already resolved (D4, D1) -- it never
-// mounts a query of its own and never asks who is looking.
+// Identity as a single column: title, description, expiry, and the
+// participation summary, in that order.
+// Receives everything already resolved -- it never mounts a query of its
+// own and never asks who is looking.
 export function AlbumHeader({
 	album,
 	stats,

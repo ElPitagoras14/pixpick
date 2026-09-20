@@ -7,10 +7,9 @@ export const api = axios.create({
 	withCredentials: true,
 });
 
-// The one shape every response body has (api-conventions spec): `data` on
-// success, `error` on failure. `details` only ever appears on a state
-// conflict (api-conventions spec, added by add-albums-and-upload) --
-// the album-full case is the one place this project's own client reads it.
+// The one shape every response body has: `data` on success, `error` on
+// failure. `details` only ever appears on a state conflict -- the
+// album-full case is the one place this project's own client reads it.
 export interface ApiError {
 	code: string;
 	message: string;
@@ -18,10 +17,9 @@ export interface ApiError {
 	requestId?: string | null;
 	details?: Record<string, unknown> | null;
 	// Only ever set for a rejection caused by a lack of capacity -- nginx's
-	// own rate limit, or the backend's connection pool (api-conventions
-	// spec, request-throttling spec) -- never for a validation failure or
-	// an unforeseen error. How many seconds to wait before trying the same
-	// request again.
+	// own rate limit, or the backend's connection pool -- never for a
+	// validation failure or an unforeseen error. How many seconds to wait
+	// before trying the same request again.
 	retryAfterSeconds?: number | null;
 }
 
@@ -56,11 +54,11 @@ type UnauthorizedHandler = () => void;
 
 let handleUnauthorized: UnauthorizedHandler | null = null;
 
-// Set once, from the router's own setup (D9): this client only reports
-// that a request came back unauthorized. Whether that means "the
-// session died mid-use" -- as opposed to the normal, un-alarming shape
-// of an anonymous visit -- is a decision that belongs to whoever holds
-// the cached session state, not to this module.
+// Set once, from the router's own setup: this client only reports that a
+// request came back unauthorized. Whether that means "the session died
+// mid-use" -- as opposed to the normal, un-alarming shape of an anonymous
+// visit -- is a decision that belongs to whoever holds the cached session
+// state, not to this module.
 export function onUnauthorized(handler: UnauthorizedHandler): void {
 	handleUnauthorized = handler;
 }

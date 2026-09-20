@@ -11,29 +11,29 @@ from src.identity.port import ExternalIdentity
 
 router = APIRouter()
 
-# Resolved from this module's own location instead of the working
-# directory, so the screen is served the same way from the repository and
-# from the image, which copies `src` whole (D5). Autoescaping is what
-# keeps a `state` written on purpose from closing its attribute and
-# adding markup of its own (D6).
+# Resolved from this module's own location instead of the working directory,
+# so the screen is served the same way from the repository and from the
+# image, which copies `src` whole. Autoescaping is what keeps a `state`
+# written on purpose from closing its attribute and adding markup of its
+# own.
 _templates = Environment(
     loader=FileSystemLoader(Path(__file__).parent / "templates"),
     autoescape=select_autoescape(["html"]),
 )
 
 # One-time codes, kept in memory: acceptable only because this adapter
-# refuses to run outside development (D2, enforced by the factory) and
-# never needs to survive a process restart.
+# refuses to run outside development (enforced by the factory) and never
+# needs to survive a process restart.
 _pending_codes: dict[str, ExternalIdentity] = {}
 
 
 @router.get("/auth/local/dev-login")
 async def dev_login_screen(state: str) -> HTMLResponse:
-    """A password-less form: the whole point of this adapter is letting
-    a developer become any identity without a third party (D1). Served
-    by the backend itself, not a frontend route -- from the interface's
-    point of view this is an external place it's sent to and returns
-    from, exactly like Google will be.
+    """A password-less form: the whole point of this adapter is letting a
+    developer become any identity without a third party. Served by the
+    backend itself, not a frontend route -- from the interface's point of
+    view this is an external place it's sent to and returns from, exactly
+    like Google will be.
     """
     return HTMLResponse(_templates.get_template("dev_login.html").render(state=state))
 
@@ -45,8 +45,7 @@ async def dev_login_submit(
     name: str = Form(""),
 ) -> RedirectResponse:
     """Issues a one-time code and sends the browser back to the generic
-    callback endpoint (D1), the same way a real provider's redirect
-    would.
+    callback endpoint, the same way a real provider's redirect would.
     """
     code = secrets.token_urlsafe(16)
     _pending_codes[code] = ExternalIdentity(
@@ -62,9 +61,9 @@ async def dev_login_submit(
 
 
 class LocalAuthAdapter:
-    """Recorre el mismo ciclo que recorrerá Google (D1): produce una
-    dirección de autorización, la persona llega a una pantalla, y el
-    retorno trae un código que se canjea por una identidad.
+    """Walks the same cycle Google will: it produces an authorization
+    address, the person lands on a screen, and the return trip carries a
+    code that is exchanged for an identity.
     """
 
     def authorization_url(self, *, state: str) -> str:

@@ -1,9 +1,8 @@
-"""D2 in album-retention's design: every read of `albums` across the
-backend composes the one condition `albums.repository.ACTIVE_CONDITION`
-defines, instead of writing its own. A view can't hold this the way
-`available_photos` holds photos' availability -- the plazo is a runtime
-setting, and a view takes no parameters -- so this scan is the
-guarantee a later query can't quietly skip it (task 2.2).
+"""Every read of `albums` across the backend composes the one condition
+`albums.repository.ACTIVE_CONDITION` defines, instead of writing its own. A
+view can't hold this the way `available_photos` holds photos' availability
+-- the retention window is a runtime setting, and a view takes no parameters -- so this
+scan is the guarantee a later query can't quietly skip it.
 """
 
 import ast
@@ -88,5 +87,5 @@ def test_every_read_of_albums_composes_the_retention_condition():
     ]
     assert not offenders, (
         "a query reads the albums table without composing "
-        "albums.repository.ACTIVE_CONDITION (album-retention design, D2):\n" + "\n".join(offenders)
+        "albums.repository.ACTIVE_CONDITION:\n" + "\n".join(offenders)
     )

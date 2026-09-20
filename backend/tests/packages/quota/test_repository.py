@@ -6,10 +6,10 @@ from tests.factories import create_album, create_photo, create_user
 
 
 async def test_the_total_counts_available_and_live_waits_but_not_expired_ones(connection):
-    """The three situations a photo's row can be in (account-quota spec):
-    confirmed, waiting with its grant still valid, and waiting with it
-    already expired. Only the third contributes nothing -- it can never
-    complete, so it holds no space.
+    """The three situations a photo's row can be in: confirmed, waiting with
+    its grant still valid, and waiting with it already expired. Only the
+    third contributes nothing -- it can never complete, so it holds no
+    space.
     """
     owner = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -37,8 +37,8 @@ async def test_confirming_replaces_the_declared_size_with_the_real_one(connectio
 
 
 async def test_an_album_of_someone_else_never_counts_against_this_account(connection):
-    """The consumption of an album is its owner's (account-quota spec):
-    being a member of one changes nothing about one's own usage."""
+    """The consumption of an album is its owner's: being a member of one
+    changes nothing about one's own usage."""
     owner = await create_user(connection)
     stranger = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)
@@ -49,8 +49,8 @@ async def test_an_album_of_someone_else_never_counts_against_this_account(connec
 
 async def test_the_breakdown_adds_up_to_the_total_and_each_album_to_its_photos(connection):
     """The three levels are one number sliced twice, never three
-    independently computed ones (account-quota spec): an album's total is
-    the sum of its photos, and the account's is the sum of its albums.
+    independently computed ones: an album's total is the sum of its photos,
+    and the account's is the sum of its albums.
     """
     owner = await create_user(connection)
     first = await create_album(connection, owner_id=owner.id, title="First")
@@ -75,8 +75,8 @@ async def test_the_breakdown_adds_up_to_the_total_and_each_album_to_its_photos(c
 
 
 async def test_the_instance_total_includes_photos_of_two_different_owners(connection):
-    """D2 in add-instance-quota: the instance's total has no owner
-    filter, so it has to abarcar every account and not just one."""
+    """The instance's total has no owner filter, so it has to abarcar every
+    account and not just one."""
     first_owner = await create_user(connection)
     second_owner = await create_user(connection)
     first_album = await create_album(connection, owner_id=first_owner.id)
@@ -90,11 +90,10 @@ async def test_the_instance_total_includes_photos_of_two_different_owners(connec
 async def test_the_instance_total_and_the_account_total_never_count_different_things(
     connection, monkeypatch
 ):
-    """The two sums SHALL differ only in scope (instance-quota spec): the
-    same one owner's photos, in every situation the two totals could
-    disagree on -- available, pending with a live grant, pending with an
-    expired one, and one in an album retention already dropped -- have
-    to add up the same way for both.
+    """The two sums SHALL differ only in scope: the same one owner's photos,
+    in every situation the two totals could disagree on -- available,
+    pending with a live grant, pending with an expired one, and one in an
+    album retention already dropped -- have to add up the same way for both.
     """
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     owner = await create_user(connection)
@@ -120,10 +119,10 @@ async def test_the_instance_total_and_the_account_total_never_count_different_th
 
 
 async def test_an_expired_album_stops_counting_against_the_account(connection, monkeypatch):
-    """D5 in album-retention's design: the account's usage is a read of
-    `albums` like any other, so it composes the same retention
-    condition -- an expired album's photos stop counting the instant
-    it expires, with none of its objects ever deleted here.
+    """The account's usage is a read of `albums` like any other, so it
+    composes the same retention condition -- an expired album's photos stop
+    counting the instant it expires, with none of its objects ever deleted
+    here.
     """
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     owner = await create_user(connection)

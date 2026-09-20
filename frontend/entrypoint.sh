@@ -1,11 +1,10 @@
 #!/bin/sh
 set -eu
 
-# Phase 1: validate every required variable is present before touching
-# anything. envsubst alone can't be trusted for this: a missing variable
-# becomes an empty string and the substitution still succeeds (D5). The
-# list is explicit here, not derived from the template, so adding a
-# placeholder without declaring it required is visible in review.
+# Checked before anything is substituted: envsubst turns a missing
+# variable into an empty string and still succeeds. The list is explicit
+# rather than derived from the template, so adding a placeholder without
+# declaring it required shows up in review.
 required_vars="API_BASE_URL ENVIRONMENT"
 
 for var in $required_vars; do

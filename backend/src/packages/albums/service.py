@@ -17,10 +17,8 @@ async def create_album(
     album = await repository.insert_album(
         connection, owner_id=owner_id, title=title, description=description
     )
-    # Crear un álbum hace miembro a su dueño (album-sharing spec): así el
-    # dueño lo califica por el mismo camino que cualquier otra persona, y
-    # es lo que hace de "mis álbumes" y "álbumes de los que soy miembro"
-    # el mismo conjunto (D9).
+    # Creating an album makes its owner a member: the owner rates it the same
+    # way anyone else does, and "mine" and "shared with me" become one set.
     await repository.add_member(connection, album_id=album.id, user_id=owner_id)
     return album
 
@@ -32,13 +30,12 @@ async def list_albums(connection: AsyncConnection, *, user_id: UUID) -> list[Alb
 async def require_owned_album(
     connection: AsyncConnection, *, album_id: UUID, user_id: UUID
 ) -> AlbumRecord:
-    """The album `user_id` owns, or raises (album-management spec, modified
-    by add-share-and-swipe). An album that doesn't exist and one `user_id`
-    has no relation to at all raise the same `NotFoundError` -- neither is
-    distinguishable from the other. One `user_id` can see as a member, but
-    doesn't own, raises `ForbiddenError` instead: a member already knows
-    the album exists, so only ownership -- never mere visibility -- is
-    what a 404 hides here.
+    """The album `user_id` owns, or raises. An album that doesn't exist and
+    one `user_id` has no relation to at all raise the same `NotFoundError`
+    -- neither is distinguishable from the other. One `user_id` can see as a
+    member, but doesn't own, raises `ForbiddenError` instead: a member
+    already knows the album exists, so only ownership -- never mere
+    visibility -- is what a 404 hides here.
     """
     album = await repository.get_owned_album(connection, album_id=album_id, owner_id=user_id)
     if album is not None:
@@ -68,10 +65,10 @@ async def rename_album(
 
 
 async def delete_album(*, album_id: UUID, user_id: UUID) -> None:
-    """Its own transaction, committed before anything talks to storage
-    (D6): a failure to delete the objects afterward leaves orphans, never
-    a row pointing at an object that no longer exists. Deliberately not
-    given the request's own connection -- see `database.utils.transaction`.
+    """Its own transaction, committed before anything talks to storage: a
+    failure to delete the objects afterward leaves orphans, never a row
+    pointing at an object that no longer exists. Deliberately not given the
+    request's own connection -- see `database.utils.transaction`.
     """
     async with transaction() as connection:
         await require_owned_album(connection, album_id=album_id, user_id=user_id)

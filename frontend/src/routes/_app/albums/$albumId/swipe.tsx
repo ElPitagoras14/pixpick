@@ -10,10 +10,9 @@ import {
 } from "@/features/viewer/searchParam";
 import { useViewerNavigation } from "@/features/viewer/useViewerNavigation";
 
-// The same param the gallery carries, on this screen's own address (D1,
-// D2): the deck stays mounted underneath and the back button closes the
-// viewer. The name comes from one place, not from two spellings that
-// have to agree.
+// The same param the gallery carries, on this screen's own address: the
+// deck stays mounted underneath and the back button closes the viewer. The
+// name comes from one place, not from two spellings that have to agree.
 const swipeSearchSchema = z.object(viewerSearchSchema);
 
 export const Route = createFileRoute("/_app/albums/$albumId/swipe")({

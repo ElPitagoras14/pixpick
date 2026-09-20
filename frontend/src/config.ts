@@ -9,7 +9,8 @@ declare global {
 	}
 }
 
-// Read from the global object populated by `config.js`, loaded synchronously
-// in index.html before this module ever runs (D4). No fallback branch: a
-// missing value is a broken deployment, not a state this code tolerates.
+// Read from the global object populated by `config.js`, loaded
+// synchronously in index.html before this module ever runs. No fallback
+// branch: a missing value is a broken deployment, not a state this code
+// tolerates.
 export const config: AppConfig = window.__PIXPICK_CONFIG__;

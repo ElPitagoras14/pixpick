@@ -12,8 +12,8 @@ interface Step {
 	description: string;
 }
 
-// The 4 steps of the real flow (album-management, album-sharing,
-// photo-rating/rating-gallery, album-stats -- design.md's "Decisions").
+// The four steps of the real flow: create an album, share it, have it
+// rated, read the result.
 const STEPS: Step[] = [
 	{
 		icon: FolderPlusIcon,

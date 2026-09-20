@@ -11,19 +11,18 @@ from .schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
 
 
 def _expires_at(renewed_at: datetime) -> datetime:
-    """The instant an album stops existing (album-retention spec, D6
-    in that change's design): sent as the instant itself, never as a
-    rendered string or a day count -- the client is what decides how to
-    say it, exactly as it already does for every other date the API
+    """The instant an album stops existing: sent as the instant itself,
+    never as a rendered string or a day count -- the client is what decides
+    how to say it, exactly as it already does for every other date the API
     returns.
     """
     return renewed_at + timedelta(days=albums_settings.album_retention_days)
 
 
 class AlbumResponse(ApiModel):
-    """A single album, right after the owner creates or renames it
-    (album-management spec): its own descriptive fields, and nothing about
-    its photos -- the grid is `photos`' own endpoint, not folded in here.
+    """A single album, right after the owner creates or renames it: its own
+    descriptive fields, and nothing about its photos -- the grid is
+    `photos`' own endpoint, not folded in here.
     """
 
     id: UUID
@@ -36,11 +35,11 @@ class AlbumResponse(ApiModel):
 
 
 class AlbumDetailResponse(ApiModel):
-    """A single album as seen by whoever is viewing it (album-management
-    spec, modified by add-share-and-swipe): `is_owner` is what the client
-    uses to show or hide the owner-only controls -- renaming, deleting,
-    uploading, administering the share link -- and `pending_count` is what
-    it shows the viewer, including the owner, still has left to rate.
+    """A single album as seen by whoever is viewing it: `is_owner` is what
+    the client uses to show or hide the owner-only controls -- renaming,
+    deleting, uploading, administering the share link -- and `pending_count`
+    is what it shows the viewer, including the owner, still has left to
+    rate.
     """
 
     id: UUID
@@ -63,12 +62,11 @@ class AlbumDetailResponse(ApiModel):
 
 
 class AlbumSummaryResponse(ApiModel):
-    """One entry of the list (album-management spec, modified by
-    add-share-and-swipe): enough to recognize the album, tell an owned one
-    from a shared one, and decide whether to open it, with no further
-    request needed per album (D9, D10). `cover_url` is `None` exactly when
-    the album has no available photo yet -- a state the client SHALL be
-    able to represent, not an error.
+    """One entry of the list: enough to recognize the album, tell an owned
+    one from a shared one, and decide whether to open it, with no further
+    request needed per album. `cover_url` is `None` exactly when the album
+    has no available photo yet -- a state the client SHALL be able to
+    represent, not an error.
     """
 
     id: UUID

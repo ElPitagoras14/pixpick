@@ -17,10 +17,10 @@ export const Route = createFileRoute("/_app/albums/$albumId/upload")({
 	component: UploadView,
 });
 
-/** How the batch went, without having to count it (D6). It sits above
- * the list and the list itself never moves: the order photos were picked
- * in is what lets someone find one among fifty, and reordering under the
- * eyes of whoever is watching costs more than a scroll. */
+/** How the batch went, without having to count it. It sits above the list
+ * and the list itself never moves: the order photos were picked in is what
+ * lets someone find one among fifty, and reordering under the eyes of
+ * whoever is watching costs more than a scroll. */
 function summarize(items: UploadItem[]) {
 	let done = 0;
 	let failed = 0;
@@ -68,9 +68,9 @@ function UploadView() {
 				<p className="text-muted-foreground text-sm">
 					Pick one or more photos to add to this album.
 				</p>
-				{/* Before choosing, not after the server turns some away (D6):
-				the limit stops being something discovered by hitting it and
-				becomes something seen while deciding. */}
+				{/* Before choosing, not after the server turns some away: the limit
+				 * stops being something discovered by hitting it and becomes something
+				 * seen while deciding. */}
 				<p
 					className={
 						remaining === 0

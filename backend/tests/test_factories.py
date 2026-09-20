@@ -4,8 +4,8 @@ from tests.factories import create_album, create_photo, create_session, create_u
 
 
 async def test_create_user_needs_only_the_email(connection):
-    """A test declares only what it cares about (backend-testing spec);
-    every other column takes a valid default."""
+    """A test declares only what it cares about; every other column takes a
+    valid default."""
     user = await create_user(connection, email="someone@example.com")
 
     assert user.id is not None
@@ -21,8 +21,8 @@ async def test_create_session_defaults_to_a_valid_unexpired_token(connection):
 
 
 async def test_an_album_with_photos_can_be_created_declaring_only_the_title(connection):
-    """A test declares only what it cares about (task 1.5): a title, and
-    however many photos, with every other column taking a valid default."""
+    """A test declares only what it cares about: a title, and however many
+    photos, with every other column taking a valid default."""
     user = await create_user(connection)
 
     album = await create_album(connection, owner_id=user.id, title="Vacation")

@@ -1,9 +1,5 @@
 class DatabaseError(Exception):
-    """Base class for data-layer failures translated for the rest of the app.
-
-    Consumers SHALL see one of these, never the driver's or the access
-    layer's original exception (database-access spec).
-    """
+    """Consumers see one of these, never the driver's own exception."""
 
 
 class DatabaseUnavailableError(DatabaseError):
@@ -14,34 +10,27 @@ class QueryExecutionError(DatabaseError):
     """Raised when a query fails once a connection was already obtained."""
 
 
-# --- Domain-level failures every endpoint's error handling maps to a
-# status code (api-conventions spec). ---
+# --- Domain-level failures every endpoint's error handling maps to a status
+# code. ---
 
 
 class UnauthenticatedError(Exception):
-    """Raised when an endpoint that requires a session gets none, or one
-    that has expired -- the two are treated identically (session-management
-    spec)."""
+    """No session, or an expired one -- the two are treated identically."""
 
 
 class ForbiddenError(Exception):
-    """Raised when a valid session lacks authorization over the resource
-    it asked for, once its existence is already known to the caller."""
+    """A valid session without authorization over a resource the caller
+    already knows exists."""
 
 
 class NotFoundError(Exception):
-    """Raised when the requested resource does not exist.
-
-    For a resource reached by an opaque identifier, this is also what a
-    handler SHALL raise for one that exists but the caller has no access
-    to (api-conventions spec) -- the two situations are indistinguishable
-    on purpose.
-    """
+    """Also what a resource reached by an opaque identifier raises when it
+    exists but the caller has no access to it: the two are indistinguishable
+    on purpose."""
 
 
 class ValidationFailedError(Exception):
-    """Raised for a domain validation failure that isn't expressible as
-    a request body's own schema, naming the field responsible."""
+    """A validation failure a request body's own schema can't express."""
 
     def __init__(self, field: str, message: str) -> None:
         self.field = field
@@ -50,15 +39,9 @@ class ValidationFailedError(Exception):
 
 
 class InsufficientCapacityError(Exception):
-    """Raised when a well-formed, authorized request can't be served
-    because a shared resource is saturated -- the connection pool
-    exhausted, for now (request-throttling spec, api-conventions spec) --
-    rather than because of anything about the request itself. Answered
-    with 503 and a retry-after, never as a validation failure or as an
-    unforeseen error (api-conventions spec): the three call for different
-    reactions from whoever's asking, and this one calls only for trying
-    the same request again once the wait is over.
-    """
+    """A shared resource is saturated -- the connection pool, for now --
+    not anything about the request. Answered with 503 and a retry-after, so
+    the caller retries the same request unchanged."""
 
     def __init__(self, retry_after_seconds: int) -> None:
         self.retry_after_seconds = retry_after_seconds
@@ -66,14 +49,9 @@ class InsufficientCapacityError(Exception):
 
 
 class StateConflictError(Exception):
-    """Raised when a well-formed request cannot proceed because of the
-    state of the resource it targets -- never because of what was sent
-    (api-conventions spec, added by add-albums-and-upload for the
-    album-full case). Always answered with 409, which is what tells a
-    client this apart from a validation failure (422): the fix is to
-    change the resource's state and retry the same request unmodified,
-    not to correct the request.
-    """
+    """The resource's state blocks the request, not what was sent. Answered
+    with 409, not 422: the fix is to change the state and retry the same
+    request."""
 
     def __init__(self, code: str, message: str, *, details: dict | None = None) -> None:
         self.code = code

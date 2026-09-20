@@ -17,9 +17,9 @@ async function fetchShareLink(albumId: string): Promise<ShareLink> {
 	return response.data.data as ShareLink;
 }
 
-// Idempotent on the server (album-sharing spec): asking for it is what
-// creates the album's first link, and asking again just returns the same
-// one -- so this is a query, not a mutation, even though it can write.
+// Idempotent on the server: asking for it is what creates the album's first
+// link, and asking again just returns the same one -- so this is a query,
+// not a mutation, even though it can write.
 export function shareLinkQueryOptions(albumId: string) {
 	return queryOptions({
 		queryKey: ["albums", albumId, "share"] as const,
@@ -72,9 +72,8 @@ export interface EnterShareResult {
 	albumId: string;
 }
 
-// A write, deliberately (D4, album-sharing spec): entering grants
-// membership, and only a same-origin POST -- never a plain navigation --
-// is allowed to do that.
+// A write, deliberately: entering grants membership, and only a same-origin
+// POST -- never a plain navigation -- is allowed to do that.
 export async function enterShare(token: string): Promise<EnterShareResult> {
 	try {
 		const response = await api.post<ApiEnvelope<EnterShareResult>>(

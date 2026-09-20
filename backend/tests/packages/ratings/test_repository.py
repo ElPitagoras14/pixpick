@@ -109,7 +109,7 @@ async def test_upsert_rating_the_opposite_value_replaces_it(connection):
         connection, photo_id=photo.id, user_id=user.id, approved=False
     )
 
-    # Same row (the schema's own unique key resolved the conflict, D3),
-    # its value replaced -- never a second rating alongside the first.
+    # Same row -- the schema's own unique key resolved the conflict -- its
+    # value replaced -- never a second rating alongside the first.
     assert first.id == second.id
     assert second.approved is False

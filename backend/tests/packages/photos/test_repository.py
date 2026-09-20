@@ -17,7 +17,7 @@ async def test_count_occupied_slots_counts_available_and_pending_with_a_live_gra
         available=False,
         upload_expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )
-    # Expired and still pending: no longer occupies a slot (D14).
+    # Expired and still pending: no longer occupies a slot.
     await create_photo(
         connection,
         album_id=album.id,
@@ -151,11 +151,11 @@ async def test_expired_pending_photo_ids_only_returns_unavailable_and_expired(co
 
 
 async def test_confirming_and_renewing_roll_back_together(connection):
-    """D4 in album-retention's design: marking a photo available and
-    restarting its album's plazo happen in the same transaction
-    (`photos.service.confirm_batch`); this exercises that transaction's
-    boundary directly, the way `test_data_access.py`'s atomic tests do,
-    a failure that undoes the first SHALL undo the second too.
+    """Marking a photo available and restarting its album's retention window happen in
+    the same transaction (`photos.service.confirm_batch`); this exercises
+    that transaction's boundary directly, the way `test_data_access.py`'s
+    atomic tests do, a failure that undoes the first SHALL undo the second
+    too.
     """
     user = await create_user(connection)
     original_renewed_at = datetime.now(UTC) - timedelta(days=10)

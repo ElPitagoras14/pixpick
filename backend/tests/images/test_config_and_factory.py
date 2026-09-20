@@ -10,8 +10,8 @@ from src.images.factory import (
 
 
 def test_an_unrecognized_provider_fails_to_validate():
-    """Startup fails naming the accepted values (image-delivery spec):
-    this is what a Literal's own validation error already does."""
+    """Startup fails naming the accepted values: this is what a Literal's
+    own validation error already does."""
     with pytest.raises(ValidationError):
         ImagesSettings(image_provider="bogus", image_signing_key="ab", image_signing_salt="cd")
 
@@ -58,12 +58,12 @@ def test_the_inactive_imagekit_providers_missing_credentials_do_not_block_local(
     assert build_image_port() is not None
 
 
-# --- Task 7.2 (image-delivery spec, D10): the combination guard. The
-# transformer this project runs itself is wired at the compose level to
-# reach only this same environment's own storage, so the 'local' image
-# provider only ever works paired with the 'local' storage provider --
-# every other combination either works (imagekit is external and its own
-# reachability isn't this project's to verify) or is rejected outright.
+# The combination guard. The transformer this project runs itself is wired
+# at the compose level to reach only this same environment's own storage, so
+# the 'local' image provider only ever works paired with the 'local' storage
+# provider -- every other combination either works (imagekit is external and
+# its own reachability isn't this project's to verify) or is rejected
+# outright.
 
 
 def test_local_image_with_local_storage_is_admitted(monkeypatch):
@@ -82,8 +82,8 @@ def test_local_image_with_a_non_local_storage_fails_to_start(monkeypatch):
 
 
 def test_imagekit_image_with_r2_storage_is_admitted(monkeypatch):
-    """The cloud pair (D10's own name for it): both external, neither
-    wired to this environment's own storage."""
+    """The cloud pair: both external, neither wired to this environment's
+    own storage."""
     monkeypatch.setattr("src.images.factory.images_settings.image_provider", "imagekit")
     monkeypatch.setattr("src.images.factory.storage_settings.storage_provider", "r2")
     monkeypatch.setattr(

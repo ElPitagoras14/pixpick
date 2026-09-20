@@ -8,28 +8,20 @@ from src.database.client import fetch_all, fetch_one, fetch_val, write
 from .config import albums_settings
 from .schemas import AlbumDetailRow, AlbumListRow, AlbumRecord
 
-# The one condition every read of `albums` composes (D2 in
-# album-retention's design): true while the instant its last photo
-# renewed it, plus the configured plazo, still lies in the future.
-# `available_photos` solves the equivalent problem for photos with a
-# view; a view can't do it here, since the plazo is a runtime setting
-# and a view takes no parameters, so this string is the one place that
-# gap is closed instead -- every query below, and every other package
-# that reads `albums`, composes it from here rather than writing its
-# own. `test_album_retention_condition.py` is what keeps a later query
-# honest. Assumes the table is aliased `a`.
+# The one condition every read of `albums` composes: true while the last
+# photo's renewal, plus the configured retention window, still lies in the
+# future. `available_photos` does this for photos with a view, which can't
+# work here -- the window is a runtime setting and a view takes no
+# parameters. Assumes the table is aliased `a`;
+# `test_album_retention_condition.py` keeps a later query honest.
 #
-# The interval is built from a cast, not `make_interval`: that
-# function's `days` parameter is an integer in Postgres, and the plazo
-# is a `float` precisely so a real end-to-end test (task 6.1) can set
-# it to a couple of minutes -- a fraction of a day. The interval
-# literal parser accepts that fraction directly.
+# A cast, not `make_interval`, whose `days` parameter is an integer: the
+# window is a `float` so a test can set it to a couple of minutes.
 ACTIVE_CONDITION = "(a.renewed_at + (:album_retention_days || ' days')::interval > now())"
 
 
 def retention_params() -> dict:
-    """The bind parameter `ACTIVE_CONDITION` needs, merged into a
-    query's own params wherever the condition is used."""
+    """The bind parameter `ACTIVE_CONDITION` needs."""
     return {"album_retention_days": albums_settings.album_retention_days}
 
 
@@ -58,10 +50,8 @@ async def get_owned_album(
     connection: AsyncConnection, *, album_id: UUID, owner_id: UUID
 ) -> AlbumRecord | None:
     """`None` both when the album doesn't exist and when it belongs to
-    someone else (album-management spec): the caller can't tell the two
-    apart from this result, which is the point -- an opaque id SHALL NOT
-    confirm another person's album exists.
-    """
+    someone else: an opaque id must not confirm another person's album
+    exists."""
     return await fetch_one(
         connection,
         f"""
@@ -75,16 +65,10 @@ async def get_owned_album(
 
 
 async def list_member_albums(connection: AsyncConnection, *, user_id: UUID) -> list[AlbumListRow]:
-    """One query for the whole list (D9, D10): "mine" and "shared with me"
-    are the same set, since creating an album makes its owner a member of
-    it (album-sharing spec) -- so the list is every album `user_id` is a
-    member of, never a union of two separate queries. The same lateral
-    subquery that resolves each album's available-photo count and cover
-    also resolves how many of them `user_id` hasn't rated yet, all in the
-    same round trip, never one query per album. `array_agg(... order by
-    position)` picks the first available photo without a second subquery
-    for the cover alone.
-    """
+    """One query for the whole list. "Mine" and "shared with me" are the
+    same set, since creating an album makes its owner a member, so this is
+    every album `user_id` belongs to. The lateral resolves the photo count,
+    the cover and the pending count in the same round trip."""
     return await fetch_all(
         connection,
         f"""
@@ -124,17 +108,10 @@ async def list_member_albums(connection: AsyncConnection, *, user_id: UUID) -> l
 async def get_accessible_album(
     connection: AsyncConnection, *, album_id: UUID, user_id: UUID
 ) -> AlbumDetailRow | None:
-    """An album `user_id` can see: its owner, or a member of it
-    (album-management spec, modified by add-share-and-swipe). `None` both
-    when the album doesn't exist and when `user_id` has no relation to it
-    at all -- the same collapse `get_owned_album` already applies to
-    ownership alone, so an opaque id SHALL NOT confirm to a stranger that
-    the album exists.
-
-    Resolves how many of the album's available photos `user_id` hasn't
-    rated yet in the same round trip (D10): the pending count travels
-    with the album wherever it's shown, never a query of its own.
-    """
+    """An album `user_id` owns or is a member of. `None` for both a missing
+    album and one they have no relation to, the same collapse
+    `get_owned_album` applies. The pending count comes back in the same
+    round trip, since it travels with the album wherever it is shown."""
     return await fetch_one(
         connection,
         f"""
@@ -160,11 +137,8 @@ async def get_accessible_album(
 
 
 async def add_member(connection: AsyncConnection, *, album_id: UUID, user_id: UUID) -> None:
-    """Idempotent (album-sharing spec): creating an album, and entering
-    its link more than once, both call this, and neither ever produces a
-    duplicate row or an error -- the composite primary key on
-    `album_members` is what actually enforces that.
-    """
+    """Idempotent, enforced by the composite primary key on `album_members`:
+    creating an album and entering its link both call this."""
     await write(
         connection,
         """
@@ -177,11 +151,8 @@ async def add_member(connection: AsyncConnection, *, album_id: UUID, user_id: UU
 
 
 async def album_exists(connection: AsyncConnection, *, album_id: UUID) -> bool:
-    """Whether `album_id` names an album that hasn't expired -- the
-    check a share link's token resolves against (album-retention spec):
-    entering through a link to an expired album SHALL NOT grant access,
-    the same rule every other read of `albums` already applies.
-    """
+    """What a share link's token resolves against: entering through a link
+    to an expired album grants nothing."""
     return await fetch_val(
         connection,
         f"select exists(select 1 from albums a where a.id = :album_id and {ACTIVE_CONDITION})",
@@ -190,11 +161,8 @@ async def album_exists(connection: AsyncConnection, *, album_id: UUID) -> bool:
 
 
 async def touch_renewed_at(connection: AsyncConnection, *, album_id: UUID) -> None:
-    """Restarts the album's plazo from now (D4 in album-retention's
-    design): called only from the same transaction that marks a photo
-    available, never on its own, so the two either both commit or both
-    roll back together.
-    """
+    """Restarts the album's retention window. Called only from the same
+    transaction that marks a photo available, so the two commit together."""
     await write(
         connection,
         "update albums set renewed_at = now() where id = :album_id",
@@ -222,9 +190,7 @@ async def rename_owned_album(
     title: str,
     description: str | None,
 ) -> AlbumRecord | None:
-    """Touches only the two descriptive columns (album-management spec):
-    the photos, their order and their availability are untouched because
-    nothing here mentions them."""
+    """Only the two descriptive columns: nothing here mentions the photos."""
     return await fetch_one(
         connection,
         """
@@ -250,12 +216,9 @@ class _PhotoIdRow(BaseModel):
 async def delete_owned_album_returning_photo_ids(
     connection: AsyncConnection, *, album_id: UUID, owner_id: UUID
 ) -> list[UUID] | None:
-    """Deletes the album -- and, via cascade, every one of its photos --
-    if owned by `owner_id`. Returns the ids the album's photos had just
-    before the delete, so the caller can compute their object keys and
-    remove them from storage *after* this transaction commits (D6); or
-    `None` if there was no such album to delete.
-    """
+    """Deletes the album and, by cascade, its photos. Returns the ids those
+    photos had, so the caller can remove their objects *after* this commits;
+    `None` when there was no such album."""
     exists = await fetch_val(
         connection,
         f"""
@@ -283,9 +246,7 @@ async def delete_owned_album_returning_photo_ids(
 
 
 class _ExpiredPhotoKey(BaseModel):
-    """Just enough to derive an object key -- the same shape
-    `photos.repository.expired_pending_photo_ids` returns for
-    reconciliation's other half."""
+    """Just enough to derive an object key."""
 
     id: UUID
     album_id: UUID
@@ -294,14 +255,9 @@ class _ExpiredPhotoKey(BaseModel):
 async def delete_expired_albums_returning_photo_keys(
     connection: AsyncConnection,
 ) -> list[_ExpiredPhotoKey]:
-    """Deletes every album whose plazo has run out, and with it --
-    through the same cascade a manual delete already relies on -- every
-    one of its photos (D3 in album-retention's design). Returns the
-    keys their objects need to be removed under, so the caller can do
-    that *after* this transaction commits (D6), the same ordering
-    `delete_owned_album_returning_photo_ids` and reconciliation's own
-    upload cleanup both already use.
-    """
+    """Deletes every album whose retention window has run out, and by cascade
+    its photos. Returns their object keys, to be removed *after* this
+    commits."""
     photo_rows = await fetch_all(
         connection,
         f"""

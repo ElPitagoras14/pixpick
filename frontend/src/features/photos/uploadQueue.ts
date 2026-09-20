@@ -19,13 +19,12 @@ import {
 	formatBytes,
 } from "@/features/quota/api";
 
-// Mirrors the server's own constants (photo-upload spec): fixed, not
-// configurable, because they're the product's own contract and not
-// something that should vary between environments. Validating here lets
-// an inadmissible file be reported immediately, with no request spent
-// (D3, task 7.1) -- the server validates the same two things again at
-// the border, and that duplication is deliberate (D3 in this change's
-// design), not a redundancy to remove.
+// Mirrors the server's own constants: fixed, not configurable, because
+// they're the product's own contract and not something that should vary
+// between environments. Validating here lets an inadmissible file be
+// reported immediately, with no request spent -- the server validates the
+// same two things again at the border, and that duplication is deliberate,
+// not a redundancy to remove.
 const ALLOWED_CONTENT_TYPES = new Set([
 	"image/jpeg",
 	"image/png",
@@ -33,14 +32,13 @@ const ALLOWED_CONTENT_TYPES = new Set([
 ]);
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
-// The batch ceiling (D13): a selection larger than this is the client's
-// own job to split into successive batches, sent in order and never in
-// parallel, so the positions they claim land in the order they were
-// picked.
+// The batch ceiling: a selection larger than this is the client's own job
+// to split into successive batches, sent in order and never in parallel, so
+// the positions they claim land in the order they were picked.
 const BATCH_SIZE = 50;
 
-// How many uploads this client keeps in flight at once (D5) -- bounded
-// so a large selection doesn't open dozens of simultaneous connections.
+// How many uploads this client keeps in flight at once -- bounded so a
+// large selection doesn't open dozens of simultaneous connections.
 const MAX_CONCURRENT_UPLOADS = 3;
 
 export type UploadItemStatus =
@@ -48,16 +46,15 @@ export type UploadItemStatus =
 	| "uploading"
 	| "confirming"
 	| ConfirmationStatus
-	// Asked for and not granted (D4): a state of its own, not a failure.
-	// Nothing went wrong -- there was no room -- so it reads differently
-	// and, unlike a failure, the way out is to free space, not to retry
-	// the same thing hoping for a different answer.
+	// Asked for and not granted: a state of its own, not a failure. Nothing
+	// went wrong -- there was no room -- so it reads differently and, unlike a
+	// failure, the way out is to free space, not to retry the same thing
+	// hoping for a different answer.
 	| "denied"
-	// The instance couldn't take this request right now -- nginx's own
-	// rate limit, or the backend's connection pool (request-throttling
-	// spec, task 4.8) -- a state of its own, not a failure: nothing about
-	// this file was wrong, and the way out is to wait and retry the same
-	// thing, unlike "failed" below.
+	// The instance couldn't take this request right now -- nginx's own rate
+	// limit, or the backend's connection pool -- a state of its own, not a
+	// failure: nothing about this file was wrong, and the way out is to wait
+	// and retry the same thing, unlike "failed" below.
 	| "busy"
 	| "failed";
 
@@ -80,13 +77,12 @@ function validateFile(file: File): string | null {
 	return null;
 }
 
-/** Why one file didn't get a grant, in the words the person can act on
- * (D4, modified by add-instance-quota): the three limits are never
- * collapsed into one message, because an album that's full is fixed by
- * creating another album, an account without space by deleting
- * something -- and an instance without space isn't fixed by whoever is
- * asking at all, so this SHALL NOT tell them to delete their own photos
- * (upload-feedback spec). */
+/** Why one file didn't get a grant, in the words the person can act on: the
+ * three limits are never collapsed into one message, because an album
+ * that's full is fixed by creating another album, an account without space
+ * by deleting something -- and an instance without space isn't fixed by
+ * whoever is asking at all, so this SHALL NOT tell them to delete their
+ * own photos. */
 function denialMessage(denial: PhotoDenial): string {
 	if (denial.reason === "album_full") {
 		return "Album full";
@@ -105,9 +101,9 @@ function errorMessage(error: unknown): string {
 	return "Something went wrong.";
 }
 
-/** How long to wait before retrying, only ever set on a rejection caused
- * by a lack of capacity (api-conventions spec, task 4.8) -- `null` for
- * every other kind of error, including one with no response at all. */
+/** How long to wait before retrying, only ever set on a rejection caused by
+ * a lack of capacity -- `null` for every other kind of error, including
+ * one with no response at all. */
 function capacityRetryAfter(error: unknown): number | null {
 	if (!axios.isAxiosError(error)) return null;
 	const seconds = error.response?.data?.error?.retryAfterSeconds;
@@ -121,8 +117,8 @@ function busyMessage(retryAfterSeconds: number): string {
 async function readImageDimensions(
 	file: File,
 ): Promise<{ width?: number; height?: number }> {
-	// A presentation hint only (photo-upload spec): if this can't be read
-	// for any reason, the upload proceeds without it rather than fail.
+	// A presentation hint only: if this can't be read for any reason, the
+	// upload proceeds without it rather than fail.
 	try {
 		const bitmap = await createImageBitmap(file);
 		const dimensions = { width: bitmap.width, height: bitmap.height };
@@ -151,10 +147,9 @@ async function uploadToStorage(
 	onProgress: (percent: number) => void,
 ): Promise<void> {
 	// Not this app's own `api` client: this goes straight to the storage
-	// provider's own origin, with none of the API's credentials or base
-	// URL (object-storage spec -- the API never sees these bytes). A PUT
-	// with the file itself as the body (D9 in add-cloud-media-adapters):
-	// `uploadHeaders` has to travel exactly as given, since it's signed
+	// provider's own origin, with none of the API's credentials or base URL
+	// -- the API never sees these bytes. A PUT with the file itself as the
+	// body: `uploadHeaders` has to travel exactly as given, since it's signed
 	// into `uploadUrl` -- a missing or altered header invalidates it.
 	await axios.put(grant.uploadUrl, file, {
 		headers: grant.uploadHeaders,
@@ -219,10 +214,10 @@ async function processBatch(
 	}
 
 	// Every file of the batch is in exactly one of the two lists, and each
-	// entry names which file it is by its index in the request (D4) -- the
-	// request carries no filename, so there is nothing else to match on,
-	// and matching by order stopped working the moment fewer grants than
-	// files could come back.
+	// entry names which file it is by its index in the request -- the request
+	// carries no filename, so there is nothing else to match on, and matching
+	// by order stopped working the moment fewer grants than files could come
+	// back.
 	denied.forEach((denial) => {
 		update(items[denial.index].id, {
 			status: "denied",
@@ -255,9 +250,9 @@ async function processBatch(
 		MAX_CONCURRENT_UPLOADS,
 	);
 
-	// Confirmed only for the ones that actually made it (task 7.4): an
-	// interrupted upload stays exactly where confirming would leave it
-	// pending, never mistaken for confirmed.
+	// Confirmed only for the ones that actually made it: an interrupted upload
+	// stays exactly where confirming would leave it pending, never mistaken
+	// for confirmed.
 	if (uploaded.length === 0) return;
 
 	uploaded.forEach(({ item }) => {
@@ -289,11 +284,10 @@ async function processBatch(
 	}
 }
 
-/** Client-side state for the whole upload flow (D5): every file has its
- * own status and progress, a bounded number upload at once, and a retry
- * only ever repeats the one file that failed (task 7.2) -- each file's
- * own pipeline (grant, upload, confirm) is independent of every other's.
- */
+/** Client-side state for the whole upload flow: every file has its own
+ * status and progress, a bounded number upload at once, and a retry only
+ * ever repeats the one file that failed -- each file's own pipeline
+ * (grant, upload, confirm) is independent of every other's. */
 export function useUploadQueue(albumId: string) {
 	const [items, setItems] = useState<UploadItem[]>([]);
 	const queryClient = useQueryClient();
@@ -306,11 +300,10 @@ export function useUploadQueue(albumId: string) {
 
 	const runItems = useCallback(
 		async (toRun: UploadItem[]) => {
-			// A selection bigger than the ceiling is split into successive
-			// batches, sent in order and never in parallel (D13): concurrent
-			// batches would still assign non-overlapping positions, but
-			// could interleave them, losing the order the photos were
-			// picked in.
+			// A selection bigger than the ceiling is split into successive batches,
+			// sent in order and never in parallel: concurrent batches would still
+			// assign non-overlapping positions, but could interleave them, losing
+			// the order the photos were picked in.
 			for (let start = 0; start < toRun.length; start += BATCH_SIZE) {
 				await processBatch(
 					albumId,
@@ -320,19 +313,18 @@ export function useUploadQueue(albumId: string) {
 				queryClient.invalidateQueries({
 					queryKey: photosQueryOptions(albumId).queryKey,
 				});
-				// The grid the uploader actually watches is the gallery now
-				// (rating-gallery spec): every one of its filters, since a
-				// newly available photo always belongs to "all" and "unrated".
+				// The grid the uploader actually watches is the gallery now: every one
+				// of its filters, since a newly available photo always belongs to "all"
+				// and "unrated".
 				queryClient.invalidateQueries({
 					queryKey: galleryQueryKeyPrefix(albumId),
 				});
 				queryClient.invalidateQueries({
 					queryKey: albumsQueryOptions().queryKey,
 				});
-				// A photo becoming available restarts the album's plazo
-				// (album-retention spec, task 5.3): the detail query is what
-				// the header's remaining-time label reads, so it's stale the
-				// moment a batch confirms.
+				// A photo becoming available restarts the album's retention window: the detail
+				// query is what the header's remaining-time label reads, so it's stale
+				// the moment a batch confirms.
 				queryClient.invalidateQueries({
 					queryKey: albumQueryOptions(albumId).queryKey,
 				});

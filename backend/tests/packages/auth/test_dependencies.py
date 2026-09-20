@@ -12,11 +12,11 @@ def test_no_cookie_raises_unauthenticated():
 
 
 async def test_no_cookie_never_reaches_the_connection_dependency(client, monkeypatch):
-    """Task 4.4: `get_current_user` declares `require_session_cookie`
-    before `get_connection` in its own signature, so FastAPI's own
-    dependency resolution -- which stops at the first one that raises --
-    never calls `get_connection` at all for a cookie-less request against
-    a real, protected route.
+    """`get_current_user` declares `require_session_cookie` before
+    `get_connection` in its own signature, so FastAPI's own dependency
+    resolution -- which stops at the first one that raises -- never calls
+    `get_connection` at all for a cookie-less request against a real,
+    protected route.
     """
     from src.database.dependencies import get_connection
 

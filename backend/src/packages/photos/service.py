@@ -33,22 +33,17 @@ from .schemas import (
 
 
 def _validate_files(files: list[GrantFileInput]) -> None:
-    """Before anything is granted, and before the album is even touched
-    (D2, D3): the client already knows each file's type and size, so a
-    rejection here means the client's own filtering missed something,
-    not a normal case this flow needs to be lenient about.
-    """
+    """A rejection here means the client's own filtering missed something:
+    it already knows every file's type and size before asking."""
     for index, file in enumerate(files):
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise ValidationFailedError(
                 field=f"files.{index}.contentType",
                 message=f"content type {file.content_type!r} is not allowed",
             )
-        # A non-positive size doesn't describe any possible file and, once
-        # subtracted from what's available, would grow it instead of
-        # consuming it (photo-upload spec, D5) -- checked here too, not
-        # only by the router's own schema, since this function is the
-        # defense that still holds for a caller that reaches it directly.
+        # A non-positive size would grow what's available instead of
+        # consuming it. Checked here as well as in the router's schema, for
+        # a caller that reaches this directly.
         if file.size <= 0:
             raise ValidationFailedError(
                 field=f"files.{index}.size", message="size must be a positive number of bytes"
@@ -63,39 +58,22 @@ def _validate_files(files: list[GrantFileInput]) -> None:
 async def grant_batch(
     connection: AsyncConnection, *, album_id: UUID, owner_id: UUID, files: list[GrantFileInput]
 ) -> GrantBatchResult:
-    """Grants what fits and explains what does not (D4, D5, and D4 in
-    add-instance-quota). Three independent capacity limits are evaluated
-    per file -- the album's maximum number of photos, the owner's
-    storage and the instance's -- and a file is granted only if it fits
-    in all three.
-
-    Neither one rejects the whole batch: running out of capacity is a
-    fact about the account's or the instance's state, not a mistake in
-    what was asked, so what fits is granted and what does not comes back
-    named and explained. An inadmissible *file*, checked above, still
-    rejects the batch whole -- the client knows its own files' type and
-    size before asking, so that one really is an inconsistency.
-    """
+    """Grants what fits and explains what does not. A file needs room in all
+    three limits -- the album's photo count, the owner's storage and the
+    instance's -- and running out of any of them is a fact about state, not
+    a mistake in the request, so the batch is never rejected whole. An
+    inadmissible file, checked above, still is."""
     _validate_files(files)
 
-    # Serializes the rest of this transaction against every other
-    # concession in the instance (D1 in add-instance-quota), where
-    # granting used to lock the owner's own row: the instance's limit
-    # spans every account, so two batches of two different owners have
-    # to serialize against each other too, which a lock on one person's
-    # row cannot do. Serializing globally already serializes by person
-    # and by album, so this still protects the position and occupancy
-    # counting the narrower locks used to.
+    # Global, not the owner's row: the instance limit spans every account,
+    # so two owners' batches have to serialize against each other too. This
+    # also covers the position and occupancy counting below.
     await quota_repository.acquire_instance_lock(connection)
-    # Without a lock (D1 in add-instance-quota): the exclusion above no
-    # longer travels attached to this check, so a session from an
-    # account deleted after it signed in still gets the same
-    # `NotFoundError` it always did.
+    # A session from an account deleted after it signed in gets
+    # `NotFoundError` here.
     if not await auth_repository.user_exists(connection, user_id=owner_id):
         raise NotFoundError()
 
-    # Ownership as a query of its own, now that it no longer travels
-    # attached to the lock (D1).
     album = await albums_repository.get_owned_album(
         connection, album_id=album_id, owner_id=owner_id
     )
@@ -116,28 +94,21 @@ async def grant_batch(
     denied: list[DeniedFile] = []
     rows: list[dict] = []
     for index, file in enumerate(files):
-        # The album is checked first: once it is full it is full for
-        # every file left, so its own reason is the one that stands even
-        # when the account or the instance has no space either (D5 --
-        # for this limit there is nothing to skip ahead to).
+        # First: a full album is full for every file left, so nothing is
+        # gained by skipping ahead the way the two size limits do.
         if remaining_photos <= 0:
             denied.append(DeniedFile(index=index, reason="album_full", remaining_photos=0))
             continue
         if file.size > remaining_bytes:
-            # Skipped, not stopped on (D5): a smaller file further down
-            # the batch may still fit, and letting one large file at the
-            # front discard the rest would waste space for no reason
-            # other than the order they were picked in.
+            # Skipped, not stopped on: a smaller file further down may still
+            # fit, and the order they were picked in shouldn't decide that.
             denied.append(
                 DeniedFile(index=index, reason="account_full", remaining_bytes=remaining_bytes)
             )
             continue
         if file.size > remaining_instance_bytes:
-            # Checked after the account (D4 in add-instance-quota): the
-            # order alone implements the precedence the spec requires --
-            # when both are full, the account's reason is the one that
-            # comes back, because it's the one whoever is asking can act
-            # on.
+            # After the account, so that when both are full the reason that
+            # comes back is the one whoever is asking can act on.
             denied.append(
                 DeniedFile(
                     index=index, reason="instance_full", remaining_bytes=remaining_instance_bytes
@@ -166,10 +137,8 @@ async def grant_batch(
             }
         )
         granted.append(GrantedFile(index=index, photo_id=photo_id, position=position, grant=grant))
-        # All three limits are charged as the walk goes (photo-upload
-        # spec): a file waiting to be confirmed occupies its slot and its
-        # declared size from the moment its grant is issued, so a batch
-        # cannot outgrow any of them against itself.
+        # Charged as the walk goes, so a batch can't outgrow a limit against
+        # itself: a file occupies its slot from the moment it is granted.
         remaining_photos -= 1
         remaining_bytes -= file.size
         remaining_instance_bytes -= file.size
@@ -186,12 +155,8 @@ async def list_photos(connection: AsyncConnection, *, album_id: UUID) -> list[Av
 async def get_gallery(
     connection: AsyncConnection, *, album_id: UUID, user_id: UUID, rating_filter: RatingFilter
 ) -> GalleryResult:
-    """Fetches every available photo with `user_id`'s own rating exactly
-    once, regardless of which filter was asked for (D1), and computes
-    the four counts in that same pass (D2): the requested slice and the
-    counts for the other three filters always come from the same rows,
-    so they can never disagree with each other.
-    """
+    """One pass, whatever the filter: the slice and the four counts come
+    from the same rows, so they can never disagree."""
     rows = await repository.list_photos_with_rating(
         connection, album_id=album_id, user_id=user_id, rating_filter="all"
     )
@@ -210,19 +175,12 @@ async def get_gallery(
 async def confirm_batch(
     *, album_id: UUID, user_id: UUID, photo_ids: list[UUID]
 ) -> tuple[list[ConfirmationOutcome], list[str]]:
-    """Verifies each photo against its real object (photo-upload spec),
-    never against what the client declared. Deliberately outside any
-    single transaction the whole way through: each photo's DB write
-    commits on its own, immediately before or after the one network call
-    that photo needs, so nothing here ever holds a transaction open
-    across a wait on storage (D6).
-    """
+    """Verifies each photo against its real object, never against what the
+    client declared. Each photo's write commits on its own, so no
+    transaction is ever held open across a wait on storage."""
     async with transaction() as connection:
-        # Confirming, like granting, is owner-only (album-management spec,
-        # modified by add-share-and-swipe): raises `ForbiddenError` for a
-        # member who isn't the owner, `NotFoundError` for anyone else.
-        # Deliberately not `Depends(get_owned_album)` at the router, per
-        # D6 above, so the check happens here instead.
+        # Owner-only, checked here rather than with `Depends(get_owned_album)`
+        # at the router, because the rest of this runs outside a transaction.
         await albums_service.require_owned_album(connection, album_id=album_id, user_id=user_id)
         photos = await repository.get_owned_photos(
             connection, album_id=album_id, owner_id=user_id, photo_ids=photo_ids
@@ -235,7 +193,7 @@ async def confirm_batch(
 
     for photo in photos:
         if photo.available:
-            # D4: reconfirming is inert and needs no call to storage at all.
+            # Reconfirming is inert and needs no call to storage at all.
             results.append(ConfirmationOutcome(photo_id=photo.id, status="available"))
             continue
 
@@ -257,9 +215,8 @@ async def confirm_batch(
 
         async with transaction() as connection:
             await repository.mark_photo_available(connection, photo_id=photo.id, size=metadata.size)
-            # D4 in album-retention's design: the same transaction that
-            # makes the photo available restarts its album's plazo, so
-            # a confirmation that rolls back never moves it either.
+            # Same transaction as the one that makes the photo available, so
+            # a confirmation that rolls back never moves the window either.
             await albums_repository.touch_renewed_at(connection, album_id=photo.album_id)
         results.append(ConfirmationOutcome(photo_id=photo.id, status="available"))
         warm_up_keys.append(key)
@@ -271,12 +228,8 @@ async def confirm_batch(
 
 
 async def delete_photo(*, album_id: UUID, user_id: UUID, photo_id: UUID) -> None:
-    """Its own transaction, committed before anything talks to storage
-    (D6) -- the same reasoning as `albums.service.delete_album`. Deleting
-    a photo is owner-only (album-management spec, modified by
-    add-share-and-swipe), checked here rather than through
-    `Depends(get_owned_album)`, for the same D6 reason `confirm_batch` does.
-    """
+    """Its own transaction, committed before anything talks to storage, and
+    owner-only checked here -- the same shape as `confirm_batch`."""
     async with transaction() as connection:
         await albums_service.require_owned_album(connection, album_id=album_id, user_id=user_id)
         deleted = await repository.delete_owned_photo(

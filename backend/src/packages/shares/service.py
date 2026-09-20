@@ -11,19 +11,15 @@ from .security import generate_share_token
 
 
 def _build_link(token: str) -> str:
-    """Built from the configured public address, never from the request's
-    own scheme or host (album-sharing spec): nginx never sees TLS, the same
-    reasoning `settings.public_url` already serves in `auth.router`.
-    """
+    """From the configured public address, never the request's own scheme or
+    host: nginx never sees TLS."""
     return f"{settings.public_url.rstrip('/')}/a/{token}"
 
 
 async def get_or_create_link(connection: AsyncConnection, *, album_id: UUID) -> str:
-    """The album's current live link, generating the first one if it has
-    none yet. Idempotent (task 2.1, D1): asking for it repeatedly -- as
-    opening the share settings would -- never itself changes what's
-    shared. Only `regenerate_link` and `revoke_link` do that.
-    """
+    """The album's live link, generating the first one if there is none.
+    Idempotent: only `regenerate_link` and `revoke_link` change what is
+    shared."""
     existing = await repository.get_live_token(connection, album_id=album_id)
     if existing is not None:
         return _build_link(existing.token)
@@ -33,12 +29,8 @@ async def get_or_create_link(connection: AsyncConnection, *, album_id: UUID) -> 
 
 
 async def regenerate_link(connection: AsyncConnection, *, album_id: UUID) -> str:
-    """Revokes the current live link, if any, and issues a new one in the
-    same operation (album-sharing spec, D1): an album never sits without a
-    live link, nor ever has two, between the two steps -- and neither
-    changes who is already a member (see `repository.add_member`, never
-    touched by revocation).
-    """
+    """Revoke and reissue in one operation, so an album never sits without a
+    live link or with two. Neither step touches who is already a member."""
     await repository.revoke_live_token(connection, album_id=album_id)
     token = generate_share_token()
     created = await repository.create_token(connection, album_id=album_id, token=token)
@@ -50,23 +42,14 @@ async def revoke_link(connection: AsyncConnection, *, album_id: UUID) -> None:
 
 
 async def enter(connection: AsyncConnection, *, token: str, user_id: UUID) -> UUID:
-    """Validates the token and grants membership in the same operation
-    (D4: this SHALL only ever be reached through a write, never a plain
-    navigation -- see the router). A token that's unknown, revoked,
-    foreign to any album, or that points at one that has expired
-    (album-retention spec) all raise the same `NotFoundError`
-    (album-sharing spec). Entering twice with the same token is a no-op,
-    not a second
-    membership row (`repository.add_member` in the albums package is what
-    makes that idempotent).
-    """
+    """Validates the token and grants membership in one operation. Unknown,
+    revoked, foreign and expired all raise the same `NotFoundError`.
+    Entering twice is a no-op, not a second membership row."""
     album_id = await repository.get_live_album_id_by_token(connection, token=token)
     if album_id is None:
         raise NotFoundError()
-    # An expired album's row and its live token can both still exist
-    # (D3 in album-retention's design defers the physical delete), so
-    # the token alone isn't enough: entering SHALL answer the same way
-    # for an expired album as for one that was never there at all.
+    # An expired album's row and token can both still exist, so the token
+    # alone isn't enough: expired has to answer like never-existed.
     if not await albums_repository.album_exists(connection, album_id=album_id):
         raise NotFoundError()
     await albums_repository.add_member(connection, album_id=album_id, user_id=user_id)

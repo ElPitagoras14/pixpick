@@ -8,8 +8,8 @@ export interface PendingPhoto {
 	width: number | null;
 	height: number | null;
 	ratingUrl: string;
-	// What the viewer shows when this photo is opened from the card
-	// (photo-viewer spec) -- the card itself keeps drawing `ratingUrl`.
+	// What the viewer shows when this photo is opened from the card -- the
+	// card itself keeps drawing `ratingUrl`.
 	viewerUrl: string;
 }
 
@@ -20,8 +20,8 @@ async function fetchPending(albumId: string): Promise<PendingPhoto[]> {
 	return response.data.data ?? [];
 }
 
-// Not paginated (D11): the deck is bounded by the album's own maximum, so
-// this brings every pending photo in one reply.
+// Not paginated: the deck is bounded by the album's own maximum, so this
+// brings every pending photo in one reply.
 export function pendingQueryOptions(albumId: string) {
 	return queryOptions({
 		queryKey: ["albums", albumId, "pending"] as const,

@@ -13,10 +13,10 @@ export interface AccountUsage {
 	albums: AlbumUsageEntry[];
 }
 
-/** The instance's own resource (instance-quota spec, D3): only the
- * percentage occupied, rounded -- never the raw total or limit, which
- * describe the installation's real capacity and aren't this resource's
- * to publish to every signed-in session. */
+/** The instance's own resource: only the percentage occupied, rounded --
+ * never the raw total or limit, which describe the installation's real
+ * capacity and aren't this resource's to publish to every signed-in
+ * session. */
 export interface InstanceUsage {
 	usedPercent: number;
 }
@@ -67,10 +67,10 @@ export function accountUsageQueryOptions() {
 	});
 }
 
-// No account or album ever invalidates this one on its own (D3 in
-// add-instance-quota): what any of them occupies is a slice of the same
-// total, but the total belongs to nobody in particular, so it's read
-// fresh rather than kept in step with every place that changes it.
+// No account or album ever invalidates this one on its own: what any of
+// them occupies is a slice of the same total, but the total belongs to
+// nobody in particular, so it's read fresh rather than kept in step with
+// every place that changes it.
 export function instanceUsageQueryOptions() {
 	return queryOptions({
 		queryKey: ["instance", "usage"] as const,
@@ -78,8 +78,8 @@ export function instanceUsageQueryOptions() {
 	});
 }
 
-// Owner-only on the server (account-quota spec): mounted only for the
-// owner, since for anyone else this resource is forbidden.
+// Owner-only on the server: mounted only for the owner, since for anyone
+// else this resource is forbidden.
 export function albumUsageQueryOptions(albumId: string) {
 	return queryOptions({
 		queryKey: ["albums", albumId, "usage"] as const,

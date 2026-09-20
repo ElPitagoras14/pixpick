@@ -9,17 +9,11 @@ from .schemas import AlbumStats, PendingPhotoRow, PhotoStats, RatingRecord
 
 
 class PendingPhotoResponse(ApiModel):
-    """One photo of the rating sequence (photo-rating spec): its declared
-    dimensions, used only to reserve its space before it loads, and the
-    `rating` variant -- never `thumbnail`, which is the grid's own size
-    (image-delivery spec).
+    """The `rating` variant, never `thumbnail`, which is the grid's size.
+    The declared dimensions reserve the photo's space before it loads.
 
-    `viewer_url` is here for the same reason it is on the gallery's own
-    photo: the viewer opens from the rating card too, and what it shows
-    is the largest variant wherever it was opened from (photo-viewer
-    spec). The card itself keeps drawing `rating_url`; this one is
-    requested only once a photo is actually opened.
-    """
+    `viewer_url` is here for the same reason it is on the gallery's photo:
+    the viewer opens from the rating card too, and shows the same variant."""
 
     id: UUID
     position: int
@@ -51,9 +45,9 @@ class RatingResponse(ApiModel):
 
 
 class PhotoStatsResponse(ApiModel):
-    """One photo's aggregate (album-stats spec): counts only, never who
-    cast them -- there is no field here that could attribute a rating to
-    a particular person."""
+    """One photo's aggregate: counts only, never who cast them -- there is
+    no field here that could attribute a rating to a particular person.
+    """
 
     photo_id: UUID
     approved_count: int
@@ -69,10 +63,9 @@ class PhotoStatsResponse(ApiModel):
 
 
 class AlbumStatsResponse(ApiModel):
-    """The owner-only resource (album-stats spec): every available
-    photo's counts, plus a summary whose total always equals their sum
-    (D3), computed fresh on every request (task 2.7) rather than served
-    from anything stored."""
+    """The owner-only resource: every available photo's counts, plus a
+    summary whose total always equals their sum, computed fresh on every
+    request rather than served from anything stored."""
 
     photos: list[PhotoStatsResponse]
     participant_count: int

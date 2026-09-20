@@ -1,9 +1,9 @@
-"""Guards the `connection` fixture's isolation guarantee itself (D9,
-backend-testing spec): both functions below write to a *non-temporary*
-table of the same name -- so, unlike a session-scoped temporary table,
-whether it's actually isolated depends entirely on the fixture's rollback,
-not on Postgres scoping it to the connection for free. Neither test may
-see the other's row, regardless of which runs first.
+"""Guards the `connection` fixture's isolation guarantee itself: both
+functions below write to a *non-temporary* table of the same name -- so,
+unlike a session-scoped temporary table, whether it's actually isolated
+depends entirely on the fixture's rollback, not on Postgres scoping it to
+the connection for free. Neither test may see the other's row, regardless of
+which runs first.
 """
 
 from pydantic import BaseModel

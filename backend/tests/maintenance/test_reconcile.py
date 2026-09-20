@@ -52,10 +52,9 @@ async def test_reconcile_discards_expired_pending_photos_and_their_objects(
 async def test_reconcile_discards_expired_albums_with_their_photos_and_objects(
     committed_connection, fake_storage, monkeypatch
 ):
-    """D3 in album-retention's design: the command that already
-    discarded abandoned uploads now also discards whole expired
-    albums, rows first and committed, storage only after -- an album
-    still within its plazo is left untouched.
+    """The command that already discarded abandoned uploads now also
+    discards whole expired albums, rows first and committed, storage only
+    after -- an album still within its retention window is left untouched.
     """
     monkeypatch.setattr(albums_settings, "album_retention_days", 30)
     user = await create_user(committed_connection)
@@ -120,11 +119,11 @@ async def test_reconcile_does_nothing_when_there_is_nothing_expired(committed_co
 async def test_reconcile_stays_invocable_by_hand_and_a_second_run_in_a_row_does_not_fail(
     committed_connection, fake_storage
 ):
-    """Task 5.3: the periodic service (compose.yaml, compose.dev.yaml)
-    invokes the exact same command a person can still run by hand
-    (src/maintenance/reconcile.py's own docstring) -- calling it twice
-    back to back, the second time against whatever the first already
-    cleaned up, SHALL NOT fail."""
+    """The periodic service (compose.yaml, compose.dev.yaml) invokes the
+    exact same command a person can still run by hand
+    (src/maintenance/reconcile.py's own docstring) -- calling it twice back
+    to back, the second time against whatever the first already cleaned up,
+    SHALL NOT fail."""
     user = await create_user(committed_connection)
     album = await create_album(committed_connection, owner_id=user.id)
     expired = await create_photo(

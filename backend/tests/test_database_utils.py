@@ -1,8 +1,7 @@
-"""Task 4.6 (request-throttling spec): the pool's own exhaustion is
-translated at the one place every write and read goes through, so it
-never surfaces as `database/client.py`'s generic `QueryExecutionError` --
-and from there, `DatabaseError`'s own 503 -- which would read as the
-database itself being down rather than merely busy.
+"""The pool's own exhaustion is translated at the one place every write and
+read goes through, so it never surfaces as `database/client.py`'s generic
+`QueryExecutionError` -- and from there, `DatabaseError`'s own 503 -- which
+would read as the database itself being down rather than merely busy.
 """
 
 import pytest

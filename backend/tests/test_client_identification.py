@@ -1,10 +1,9 @@
-"""Real stack only (request-throttling spec, tasks 2.1-2.3): requires
-`docker compose -f compose.dev.yaml up -d --build` already running, with
-the network's fixed subnet and `ip_range` from that file (D4 in
-harden-local-profile's design). Exercised against the containers
-themselves, not through Python, because what is under test is nginx's own
-`set_real_ip_from` and uvicorn's own `forwarded_allow_ips` -- neither is
-reachable by importing this project's code.
+"""Real stack only: requires `docker compose -f compose.dev.yaml up -d
+--build` already running, with the network's fixed subnet and `ip_range`
+from that file. Exercised against the containers themselves, not through
+Python, because what is under test is nginx's own `set_real_ip_from` and
+uvicorn's own `forwarded_allow_ips` -- neither is reachable by importing
+this project's code.
 """
 
 import re
@@ -48,11 +47,11 @@ def _address_logging_for(log_text: str, marker: str) -> str | None:
 
 
 async def test_a_forged_header_from_outside_the_network_is_ignored(running_stack):
-    """Task 2.3: a request that never went through the platform's own
-    proxy -- here, one that reaches nginx through compose.dev.yaml's own
-    published port, which arrives as the network's gateway address, kept
-    out of the trusted `ip_range` on purpose -- has its own
-    X-Forwarded-For ignored by both nginx and the backend behind it.
+    """A request that never went through the platform's own proxy -- here,
+    one that reaches nginx through compose.dev.yaml's own published port,
+    which arrives as the network's gateway address, kept out of the trusted
+    `ip_range` on purpose -- has its own X-Forwarded-For ignored by both
+    nginx and the backend behind it.
     """
     marker = f"probe-{uuid.uuid4().hex}"
     async with httpx.AsyncClient() as client:
@@ -69,7 +68,7 @@ async def test_a_forged_header_from_outside_the_network_is_ignored(running_stack
 
 
 async def test_a_declared_address_from_inside_the_network_is_trusted(running_stack):
-    """Tasks 2.1, 2.2: a request that does arrive from the trusted
+    """A request that does arrive from the trusted
     `ip_range` -- simulated here from the backend container itself,
     itself a member of it, standing in for the platform's own proxy --
     has the address it declares recorded by both nginx and the backend,

@@ -22,9 +22,9 @@ export interface GalleryPhoto {
 	width: number | null;
 	height: number | null;
 	thumbnailUrl: string;
-	// The largest variant, carried next to the thumbnail and requested
-	// only when a photo is actually opened (photo-viewer spec): drawing
-	// the grid costs exactly what it cost before.
+	// The largest variant, carried next to the thumbnail and requested only
+	// when a photo is actually opened: drawing the grid costs exactly what it
+	// cost before.
 	viewerUrl: string;
 	rating: "approved" | "rejected" | null;
 }
@@ -59,11 +59,11 @@ async function fetchGallery(
 	return response.data.data ?? { photos: [], counts: EMPTY_COUNTS };
 }
 
-// Every filter's own cache lives under this one prefix (D2, D7): setting
-// a rating invalidates all four together, rather than working out which
-// ones the change actually moved the photo into or out of. Exported so
-// that uploading and deleting a photo (`features/photos`) can invalidate
-// every filter too, without importing each one's own query options.
+// Every filter's own cache lives under this one prefix: setting a rating
+// invalidates all four together, rather than working out which ones the
+// change actually moved the photo into or out of. Exported so that
+// uploading and deleting a photo (`features/photos`) can invalidate every
+// filter too, without importing each one's own query options.
 export function galleryQueryKeyPrefix(albumId: string) {
 	return ["albums", albumId, "gallery"] as const;
 }
@@ -75,12 +75,10 @@ export function galleryQueryOptions(albumId: string, filter: GalleryFilter) {
 	});
 }
 
-/** Changes a rating from the gallery (rating-gallery spec): the same
- * `ratePhoto` operation the swipe sequence uses (D6), but through a plain
- * optimistic mutation instead of the swipe's own retrying queue -- the
- * queue exists for a burst of decisions in a row, and here it's one tap
- * at a time.
- */
+/** Changes a rating from the gallery: the same `ratePhoto` operation the
+ * swipe sequence uses, but through a plain optimistic mutation instead of
+ * the swipe's own retrying queue -- the queue exists for a burst of
+ * decisions in a row, and here it's one tap at a time. */
 export function useSetRating(albumId: string) {
 	const queryClient = useQueryClient();
 	const prefix = galleryQueryKeyPrefix(albumId);
@@ -93,10 +91,10 @@ export function useSetRating(albumId: string) {
 			photoId: string;
 			approved: boolean;
 		}) => ratePhoto(albumId, photoId, approved),
-		// D7: this only ever patches the `rating` field of the matching
-		// entry, in every filter's own cached list -- it never removes an
-		// entry, even from a list it no longer belongs in. That's what
-		// keeps the grid from jumping under whoever just tapped it.
+		// This only ever patches the `rating` field of the matching entry, in
+		// every filter's own cached list -- it never removes an entry, even from
+		// a list it no longer belongs in. That's what keeps the grid from jumping
+		// under whoever just tapped it.
 		onMutate: async ({ photoId, approved }) => {
 			await queryClient.cancelQueries({ queryKey: prefix });
 			const previous = queryClient.getQueriesData<Gallery>({
@@ -122,11 +120,10 @@ export function useSetRating(albumId: string) {
 			});
 		},
 		onSettled: () => {
-			// Marked stale, not force-refetched (`refetchType: "none"`): the
-			// filter being looked at right now keeps its optimistic value
-			// until it's asked for again (D7) -- a background refetch here
-			// would remove the photo the instant the request resolves,
-			// which is exactly the jump D7 rules out.
+			// Marked stale, not force-refetched (`refetchType: "none"`): the filter
+			// being looked at right now keeps its optimistic value until it's asked
+			// for again -- a background refetch here would remove the photo the
+			// instant the request resolves, which is exactly the jump to avoid.
 			queryClient.invalidateQueries({ queryKey: prefix, refetchType: "none" });
 			queryClient.invalidateQueries({
 				queryKey: albumQueryOptions(albumId).queryKey,
@@ -159,8 +156,8 @@ async function fetchAlbumStats(albumId: string): Promise<AlbumStats> {
 	);
 }
 
-// Owner-only on the server (album-stats spec); this project's own router
-// never even mounts a route that would call this for anyone else (D8).
+// Owner-only on the server; this project's own router never even mounts a
+// route that would call this for anyone else.
 export function albumStatsQueryOptions(albumId: string) {
 	return queryOptions({
 		queryKey: ["albums", albumId, "stats"] as const,

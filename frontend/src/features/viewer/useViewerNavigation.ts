@@ -3,15 +3,14 @@ import { useCallback, useRef } from "react";
 
 import { VIEWER_SEARCH_PARAM } from "@/features/viewer/searchParam";
 
-/** Moving the viewer's own param around the address it already sits on
- * (D1, D2). Both screens that open the viewer do it identically, so the
- * three moves live here once instead of being spelled out twice.
+/** Moving the viewer's own param around the address it already sits on.
+ * Both screens that open the viewer do it identically, so the three moves
+ * live here once instead of being spelled out twice.
  *
  * `resetScroll: false` on every one of them: the router sends each
- * navigation back to the top of the page, and none of these is a change
- * of screen -- it is the same grid, or the same deck, with something
- * drawn over it.
- */
+ * navigation back to the top of the page, and none of these is a change of
+ * screen -- it is the same grid, or the same deck, with something drawn
+ * over it. */
 export function useViewerNavigation() {
 	const navigate = useNavigate();
 	const router = useRouter();
@@ -34,8 +33,8 @@ export function useViewerNavigation() {
 		[navigate],
 	);
 
-	/** Opening pushes an entry, so the browser's own back button closes
-	 * the viewer with nothing to intercept (D1). */
+	/** Opening pushes an entry, so the browser's own back button closes the
+	 * viewer with nothing to intercept. */
 	const openPhoto = useCallback(
 		(photoId: string) => {
 			pushedHere.current = true;
@@ -54,11 +53,11 @@ export function useViewerNavigation() {
 		[setParam],
 	);
 
-	/** Closing is a step back in history, not a new address (D1): that is
-	 * what hands back the filter and the exact scroll position without
-	 * this code saving or restoring either of them. Only a viewer that
-	 * was opened from a link, with no entry of ours behind it, closes by
-	 * dropping the param instead. */
+	/** Closing is a step back in history, not a new address: that is what
+	 * hands back the filter and the exact scroll position without this code
+	 * saving or restoring either of them. Only a viewer that was opened from
+	 * a link, with no entry of ours behind it, closes by dropping the param
+	 * instead. */
 	const closeViewer = useCallback(() => {
 		if (pushedHere.current) {
 			pushedHere.current = false;

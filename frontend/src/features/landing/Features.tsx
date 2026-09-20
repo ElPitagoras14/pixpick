@@ -12,10 +12,9 @@ interface Feature {
 	description: string;
 }
 
-// The 4 characteristics traced in design.md's "Decisions" -- album-sharing,
-// upload-feedback, album-stats and photo-viewer. The retention window
-// (album-retention) is deliberately left out: an operational limit, not a
-// reason to come in.
+// The four characteristics worth coming in for: sharing, upload feedback,
+// stats and the viewer. The retention window is deliberately left out --
+// an operational limit, not a reason to come in.
 const FEATURES: Feature[] = [
 	{
 		icon: LinkIcon,

@@ -4,12 +4,11 @@ from src.storage.port import StoragePort, object_key
 
 
 def test_the_port_has_exactly_the_four_operations_and_none_reads_content():
-    """No operation returns bytes (D2): the transformer reads originals
-    from the storage on its own. Preparing the storage is one of them,
-    so the startup that calls it never names a provider. `bucket` is the
-    one member that isn't an operation (task 7.1, harden-local-profile):
-    a plain property naming the active provider's own space, not a call
-    that reaches the network."""
+    """No operation returns bytes: the transformer reads originals from the
+    storage on its own. Preparing the storage is one of them, so the startup
+    that calls it never names a provider. `bucket` is the one member that
+    isn't an operation: a plain property naming the active provider's own
+    space, not a call that reaches the network."""
     assert typing.get_protocol_members(StoragePort) == {
         "ensure_ready",
         "grant_upload",

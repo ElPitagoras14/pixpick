@@ -12,9 +12,9 @@ from .packages.ratings.router import router as ratings_router
 from .packages.shares.router import enter_router as shares_enter_router
 from .packages.shares.router import router as shares_router
 
-# The browser and the backend see the exact same path: nginx proxies
-# `/api` without rewriting it (D2), so the prefix lives here instead of
-# being stripped and re-added at nginx.
+# The browser and the backend see the exact same path: nginx proxies `/api`
+# without rewriting it, so the prefix lives here instead of being stripped
+# and re-added at nginx.
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health_router)
 api_router.include_router(auth_router)

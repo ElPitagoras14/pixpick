@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # The site's own address, used to build any absolute URL the backend
     # generates instead of trusting the request's scheme or host: nginx
     # never sees TLS, since the platform's proxy terminates it in front of
-    # it (D9 in add-local-environment).
+    # it.
     public_url: str
 
 

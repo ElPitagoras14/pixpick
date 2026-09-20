@@ -14,15 +14,14 @@ class MissingCredentialsError(RuntimeError):
 
 
 def build_storage_port(provider: str | None = None) -> StoragePort:
-    """The application's single point of provider selection: the rest of
-    the code depends on `StoragePort` and never branches on which
-    provider is active (object-storage spec). Defaults to whichever
-    provider is configured active; the migration check (D6 in
-    add-cloud-media-adapters) is the one caller that names a provider
-    explicitly, to build a port for a migration's destination without
-    that becoming the active one -- which only works because each
-    provider keeps its own group of settings (D9), so naming one never
-    depends on it also being the active value.
+    """The application's single point of provider selection: the rest of the
+    code depends on `StoragePort` and never branches on which provider is
+    active. Defaults to whichever provider is configured active; the
+    migration check is the one caller that names a provider explicitly, to
+    build a port for a migration's destination without that becoming the
+    active one -- which only works because each provider keeps its own group
+    of settings, so naming one never depends on it also being the active
+    value.
     """
     selected = provider if provider is not None else storage_settings.storage_provider
     if selected == "local":

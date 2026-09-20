@@ -13,8 +13,8 @@ export type BackDestination =
 	| null;
 
 // Mirrors BottomNav's activeTab: the match logic lives in AppLayout, this
-// component only picks which literal <Link> to render (design.md's
-// "un único valor de destino" pattern) and stays silent when there is none.
+// component only picks which literal <Link> to render from the single
+// destination it is handed, and stays silent when there is none.
 export function BackButton({ destination }: { destination: BackDestination }) {
 	if (!destination) {
 		return null;

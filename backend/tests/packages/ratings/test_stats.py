@@ -10,8 +10,8 @@ from tests.factories import (
 
 
 async def test_a_photo_nobody_rated_appears_at_zero(connection):
-    """Task 2.1: starting from the album's photos, not from its ratings,
-    is what keeps an unrated photo from being missing entirely."""
+    """Starting from the album's photos, not from its ratings, is what keeps
+    an unrated photo from being missing entirely."""
     owner = await create_user(connection)
     album = await create_album(connection, owner_id=owner.id)
     photo = await create_photo(connection, album_id=album.id, position=1)
@@ -97,8 +97,8 @@ async def test_an_unavailable_photo_does_not_appear_in_the_stats(connection):
 
 
 async def test_the_response_carries_no_identity(client, connection):
-    """Task 2.5: only counts, nothing that names or otherwise identifies
-    who cast a rating."""
+    """Only counts, nothing that names or otherwise identifies who cast a
+    rating."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     photo = await create_photo(connection, album_id=album.id, position=1)
@@ -125,7 +125,7 @@ async def test_the_owners_own_ratings_count_like_anyone_elses(client, connection
 
 
 async def test_a_new_rating_is_reflected_immediately(client, connection):
-    """Task 2.7: no value computed ahead of time."""
+    """No value computed ahead of time."""
     owner = await log_in(client, connection)
     album = await create_album(connection, owner_id=owner.id)
     photo = await create_photo(connection, album_id=album.id, position=1)

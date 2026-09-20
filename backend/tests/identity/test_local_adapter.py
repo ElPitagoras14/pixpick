@@ -79,7 +79,7 @@ def _parse(html: str) -> _Markup:
 async def test_a_state_with_markup_characters_reaches_the_page_as_text():
     """The address is what decides `state`, so a value written on purpose
     must not be able to close the attribute it lands in and add markup of
-    its own (code-conventions spec, D6).
+    its own.
     """
     hostile = '"><script>alert("x")</script><input name="evil'
 

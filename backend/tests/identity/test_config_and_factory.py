@@ -10,8 +10,8 @@ from src.identity.factory import (
 
 
 def test_an_unrecognized_provider_fails_to_validate():
-    """Startup fails naming the accepted values (identity-provider spec):
-    this is what a Literal's own validation error already does."""
+    """Startup fails naming the accepted values: this is what a Literal's
+    own validation error already does."""
     with pytest.raises(ValidationError):
         IdentitySettings(identity_provider="bogus")
 
