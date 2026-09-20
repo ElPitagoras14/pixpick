@@ -32,6 +32,10 @@ class FakeStoragePort:
         self._grants: dict[str, _PendingGrant] = {}
         self._objects: dict[str, _StoredObject] = {}
 
+    @property
+    def bucket(self) -> str:
+        return "fake-bucket"
+
     async def ensure_ready(self) -> None:
         """Nothing to create: this storage's space is the dictionary
         above, which exists from the moment the double does. It's still

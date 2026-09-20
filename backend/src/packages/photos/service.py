@@ -44,6 +44,15 @@ def _validate_files(files: list[GrantFileInput]) -> None:
                 field=f"files.{index}.contentType",
                 message=f"content type {file.content_type!r} is not allowed",
             )
+        # A non-positive size doesn't describe any possible file and, once
+        # subtracted from what's available, would grow it instead of
+        # consuming it (photo-upload spec, D5) -- checked here too, not
+        # only by the router's own schema, since this function is the
+        # defense that still holds for a caller that reaches it directly.
+        if file.size <= 0:
+            raise ValidationFailedError(
+                field=f"files.{index}.size", message="size must be a positive number of bytes"
+            )
         if file.size > MAX_FILE_SIZE:
             raise ValidationFailedError(
                 field=f"files.{index}.size",

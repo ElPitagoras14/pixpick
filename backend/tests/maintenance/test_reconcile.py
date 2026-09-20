@@ -115,3 +115,42 @@ async def test_reconcile_does_nothing_when_there_is_nothing_expired(committed_co
         committed_connection, album_id=album.id, owner_id=user.id, photo_ids=[photo.id]
     )
     assert [row.id for row in remaining] == [photo.id]
+
+
+async def test_reconcile_stays_invocable_by_hand_and_a_second_run_in_a_row_does_not_fail(
+    committed_connection, fake_storage
+):
+    """Task 5.3: the periodic service (compose.yaml, compose.dev.yaml)
+    invokes the exact same command a person can still run by hand
+    (src/maintenance/reconcile.py's own docstring) -- calling it twice
+    back to back, the second time against whatever the first already
+    cleaned up, SHALL NOT fail."""
+    user = await create_user(committed_connection)
+    album = await create_album(committed_connection, owner_id=user.id)
+    expired = await create_photo(
+        committed_connection,
+        album_id=album.id,
+        position=1,
+        available=False,
+        upload_expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    expired_key = f"albums/{album.id}/{expired.id}"
+    fake_storage.grant_upload(
+        album_id=str(album.id),
+        photo_id=str(expired.id),
+        content_type="image/jpeg",
+        ttl_seconds=60,
+    )
+    fake_storage.upload(target_key=expired_key, size=10, content_type="image/jpeg")
+    await committed_connection.commit()
+
+    await reconcile.reconcile()
+    remaining = await repository.get_owned_photos(
+        committed_connection, album_id=album.id, owner_id=user.id, photo_ids=[expired.id]
+    )
+    assert remaining == []
+
+    # The second run finds an already-clean environment: no row left to
+    # discard, no object left orphaned -- and, per the assertion below,
+    # no exception either.
+    await reconcile.reconcile()

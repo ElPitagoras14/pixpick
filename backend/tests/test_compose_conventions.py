@@ -31,6 +31,14 @@ _BUILT = _REPO_ROOT / "compose.dev.yaml"
 # other key is compared verbatim.
 _MAY_DIFFER = frozenset({"image", "build", "ports"})
 
+# `migrate` alone may also differ on these two (harden-local-profile):
+# compose.dev.yaml already assumes the repo is checked out to build the
+# image from source, so it also bind-mounts dbmate/ and drops
+# --no-dump-schema, regenerating dbmate/schema.sql as part of coming up.
+# compose.yaml consumes the published image specifically so a deployment
+# never needs the repo checked out, which that mount would defeat.
+_MIGRATE_MAY_ALSO_DIFFER = frozenset({"volumes", "command"})
+
 
 def _load(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -72,7 +80,8 @@ def test_every_field_but_the_image_and_the_ports_is_identical(published, built):
     offenders = []
     for name in sorted(set(published["services"]) & set(built["services"])):
         here, there = published["services"][name], built["services"][name]
-        for field in sorted((set(here) | set(there)) - _MAY_DIFFER):
+        may_differ = _MAY_DIFFER | _MIGRATE_MAY_ALSO_DIFFER if name == "migrate" else _MAY_DIFFER
+        for field in sorted((set(here) | set(there)) - may_differ):
             offenders += _disagreements(f"{name}.{field}", here.get(field), there.get(field))
     assert not offenders, (
         "the two declarations disagree on something other than the image and the "
@@ -144,3 +153,20 @@ def test_the_networks_and_volumes_are_the_same(published, built):
             f"the two declarations define different {section}; a service moved between "
             "them would land somewhere else depending on which file was used"
         )
+
+
+def test_every_service_declares_a_memory_ceiling_and_a_restart_policy(published, built):
+    """Task 6.3 (local-environment spec): every service says on its own
+    how much memory it can take and what happens if it ends unexpectedly,
+    instead of some of them being left at whatever the runtime defaults
+    to."""
+    offenders = []
+    for path, document in ((_PUBLISHED, published), (_BUILT, built)):
+        for name, service in document["services"].items():
+            if "mem_limit" not in service:
+                offenders.append(f"  {path.name}: {name} declares no mem_limit")
+            if "restart" not in service:
+                offenders.append(f"  {path.name}: {name} declares no restart policy")
+    assert not offenders, (
+        "a service is missing a resource ceiling or a restart policy:\n" + "\n".join(offenders)
+    )

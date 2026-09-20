@@ -44,6 +44,45 @@ async def test_a_blank_title_is_rejected_the_same_way(client, connection):
     assert response.json()["error"]["field"] == "title"
 
 
+async def test_a_title_longer_than_the_maximum_is_rejected_on_create(client, connection):
+    await log_in(client, connection)
+
+    response = client.post(
+        "/api/albums", json={"title": "x" * (albums_settings.album_title_max_length + 1)}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["field"] == "title"
+
+
+async def test_a_description_longer_than_the_maximum_is_rejected_on_create(client, connection):
+    await log_in(client, connection)
+
+    response = client.post(
+        "/api/albums",
+        json={
+            "title": "Vacation",
+            "description": "x" * (albums_settings.album_description_max_length + 1),
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["field"] == "description"
+
+
+async def test_a_title_longer_than_the_maximum_is_rejected_on_rename(client, connection):
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.patch(
+        f"/api/albums/{album.id}",
+        json={"title": "x" * (albums_settings.album_title_max_length + 1)},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["field"] == "title"
+
+
 async def test_listing_shows_the_callers_own_and_shared_albums(client, connection):
     owner = await log_in(client, connection)
     stranger = await create_user(connection)

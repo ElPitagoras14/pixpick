@@ -8,6 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .exceptions import (
     DatabaseError,
     ForbiddenError,
+    InsufficientCapacityError,
     NotFoundError,
     StateConflictError,
     UnauthenticatedError,
@@ -26,6 +27,25 @@ async def _database_error_handler(request: Request, exc: DatabaseError) -> JSONR
     return JSONResponse(
         status_code=503,
         content=error_envelope("service_unavailable", "the service is temporarily unavailable"),
+    )
+
+
+async def _insufficient_capacity_handler(
+    request: Request, exc: InsufficientCapacityError
+) -> JSONResponse:
+    """Distinguishable from both a validation failure and an unforeseen
+    error (request-throttling spec, api-conventions spec): 503, a code of
+    its own, and a retry-after -- never logged as an error, since this is
+    an expected, load-shedding response, not a defect to investigate.
+    """
+    return JSONResponse(
+        status_code=503,
+        content=error_envelope(
+            "insufficient_capacity",
+            "the service is temporarily at capacity; please retry shortly",
+            retry_after_seconds=exc.retry_after_seconds,
+        ),
+        headers={"Retry-After": str(exc.retry_after_seconds)},
     )
 
 
@@ -124,6 +144,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
 
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(DatabaseError, _database_error_handler)
+    app.add_exception_handler(InsufficientCapacityError, _insufficient_capacity_handler)
     app.add_exception_handler(UnauthenticatedError, _unauthenticated_handler)
     app.add_exception_handler(ForbiddenError, _forbidden_handler)
     app.add_exception_handler(NotFoundError, _not_found_handler)

@@ -76,7 +76,8 @@ CREATE TABLE public.photos (
     height integer,
     upload_expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT photos_declared_size_positive CHECK ((declared_size > 0))
 );
 
 
@@ -450,4 +451,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('0002'),
     ('0003'),
     ('0004'),
-    ('0005');
+    ('0005'),
+    ('0006');

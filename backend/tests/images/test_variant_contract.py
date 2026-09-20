@@ -203,3 +203,46 @@ def test_the_viewer_variant_never_enlarges_a_smaller_original(uploaded_object):
 
     assert response.status_code == 200
     assert _webp_size(response.content) == (8, 8)
+
+
+@pytest.fixture
+def uploaded_oversized_original() -> Iterator[str]:
+    """A real original above TRANSFORMER_MAX_SRC_RESOLUTION (.env.example's
+    default of 40 megapixels): solid color, so the compressed file itself
+    stays small even at this pixel count (task 6.2)."""
+    key = f"albums/contract-test/{uuid.uuid4()}"
+    client = _direct_client()
+    client.put_object(
+        Bucket=storage_settings.minio_bucket,
+        Key=key,
+        Body=_solid_png(9000, 9000),
+        ContentType="image/png",
+    )
+    yield key
+    client.delete_object(Bucket=storage_settings.minio_bucket, Key=key)
+
+
+def test_an_original_over_the_resolution_ceiling_is_rejected_without_processing(
+    uploaded_oversized_original,
+):
+    """Task 6.2: the transformer's own IMGPROXY_MAX_SRC_RESOLUTION rejects
+    an original above it before producing anything, regardless of what
+    the catalog's own variant specs ask for."""
+    url = image_port.variant_url(object_key=uploaded_oversized_original, variant=Variant.THUMBNAIL)
+
+    response = httpx.get(url, timeout=30)
+
+    assert response.status_code >= 400
+
+
+def test_reading_outside_the_declared_prefix_is_rejected(uploaded_object):
+    """Task 6.2: IMGPROXY_ALLOWED_SOURCES scopes the transformer to the
+    albums/ prefix -- a validly-signed address for an object outside it
+    is still rejected, by the transformer itself rather than by the
+    signature."""
+    outside_key = uploaded_object.replace("albums/contract-test/", "outside/", 1)
+    url = image_port.variant_url(object_key=outside_key, variant=Variant.THUMBNAIL)
+
+    response = httpx.get(url, timeout=30)
+
+    assert response.status_code >= 400

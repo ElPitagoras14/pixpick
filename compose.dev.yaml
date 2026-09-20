@@ -12,6 +12,13 @@
 # only in where each image comes from and which ports are published.
 services:
   postgres:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 512m
+    restart: unless-stopped
     image: postgres:18.6
     ports:
       - "${POSTGRES_PORT}:5432"
@@ -40,11 +47,28 @@ services:
   # the first time it is used, and `up` creates it before migrating --
   # a no-op every other time.
   migrate:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 256m
+    restart: "no"
     build:
       context: ./dbmate
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-    command: ["--no-dump-schema", "up"]
+    # Not --no-dump-schema, and with the repo's own dbmate/ bind-mounted
+    # over the image's baked-in copy (harden-local-profile): this profile
+    # already assumes the repo is checked out to build from source, so
+    # this is where dbmate/schema.sql gets regenerated automatically
+    # instead of by a separate manual command (README.md). compose.yaml
+    # keeps both the flag and the absence of this mount -- it consumes
+    # the published image specifically so a deployment never needs the
+    # repo checked out, which a bind mount would defeat.
+    command: ["up"]
+    volumes:
+      - ./dbmate:/db
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,11 +76,21 @@ services:
       - pixpick
 
   backend:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 512m
+    restart: unless-stopped
     build:
       context: ./backend
     environment:
       ENVIRONMENT: ${ENVIRONMENT}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      STATEMENT_TIMEOUT_MS: ${STATEMENT_TIMEOUT_MS}
+      LOCK_TIMEOUT_MS: ${LOCK_TIMEOUT_MS}
+      IDLE_IN_TRANSACTION_TIMEOUT_MS: ${IDLE_IN_TRANSACTION_TIMEOUT_MS}
       IDENTITY_PROVIDER: ${IDENTITY_PROVIDER}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
@@ -65,7 +99,12 @@ services:
       MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
       MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET}
-      MINIO_BROWSER_ENDPOINT: ${MINIO_BROWSER_ENDPOINT}
+      # STORAGE_PUBLIC_URL, not MINIO_BROWSER_ENDPOINT (object-storage
+      # spec, D1 in harden-local-profile's design): the browser now writes
+      # through the entry point's own storage hostname, not MinIO's own
+      # address, which native mode is the only profile that still uses
+      # MINIO_BROWSER_ENDPOINT's bare .env value for.
+      MINIO_BROWSER_ENDPOINT: ${STORAGE_PUBLIC_URL}
       # Composed here, never taken from .env: this is the address the
       # services reach each other by inside this network.
       MINIO_SERVER_ENDPOINT: http://storage:9000
@@ -82,6 +121,64 @@ services:
       ACCOUNT_MAX_BYTES: ${ACCOUNT_MAX_BYTES}
       INSTANCE_MAX_BYTES: ${INSTANCE_MAX_BYTES}
       ALBUM_RETENTION_DAYS: ${ALBUM_RETENTION_DAYS}
+      ALBUM_TITLE_MAX_LENGTH: ${ALBUM_TITLE_MAX_LENGTH}
+      ALBUM_DESCRIPTION_MAX_LENGTH: ${ALBUM_DESCRIPTION_MAX_LENGTH}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage:
+        condition: service_healthy
+    networks:
+      - pixpick
+
+  # Discards expired uploads and expired albums on a schedule (photo-
+  # upload spec, album-retention spec, D6 in harden-local-profile's
+  # design): the same command `src/maintenance/reconcile.py`'s own
+  # docstring documents as a manual one, invoked here in a loop instead
+  # of by someone remembering to run it. The local disk this profile
+  # shares between the storage, the database and the cache is what makes
+  # what it discards visible as a full disk instead of an unbilled
+  # difference (D6) -- the same image as `backend`, since this is the
+  # same codebase's own command, not a service of its own.
+  reconciler:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 256m
+    restart: unless-stopped
+    build:
+      context: ./backend
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          python -m src.maintenance.reconcile
+          sleep "$RECONCILE_INTERVAL_SECONDS"
+        done
+    environment:
+      # Only what src/maintenance/reconcile.py's own import graph actually
+      # reaches (task 8.2): the database, the active storage provider's
+      # credentials, and album-retention's own setting -- never identity,
+      # images, or the quota/length settings this command never reads.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      STATEMENT_TIMEOUT_MS: ${STATEMENT_TIMEOUT_MS}
+      LOCK_TIMEOUT_MS: ${LOCK_TIMEOUT_MS}
+      IDLE_IN_TRANSACTION_TIMEOUT_MS: ${IDLE_IN_TRANSACTION_TIMEOUT_MS}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER}
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_BROWSER_ENDPOINT: ${STORAGE_PUBLIC_URL}
+      MINIO_SERVER_ENDPOINT: http://storage:9000
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      ALBUM_RETENTION_DAYS: ${ALBUM_RETENTION_DAYS}
+      # How often the loop above re-runs the command, in seconds (D6, D11).
+      RECONCILE_INTERVAL_SECONDS: ${RECONCILE_INTERVAL_SECONDS}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -91,6 +188,13 @@ services:
       - pixpick
 
   frontend:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 128m
+    restart: unless-stopped
     build:
       context: ./frontend
     environment:
@@ -106,6 +210,13 @@ services:
   # it: which provider the application talks to is decided by that variable,
   # never by which containers are up.
   storage:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 512m
+    restart: unless-stopped
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     ports:
       - "${MINIO_PORT}:9000"
@@ -117,6 +228,10 @@ services:
       # -- and with a single bucket the two are equally precise anyway
       # (D3, D9 in add-media-ports-and-local-adapters).
       MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_ALLOWED_ORIGINS}
+      # No console UI for this profile to expose (object-storage spec,
+      # task 6.1 in harden-local-profile): explicit, not left to whatever
+      # a given MinIO version defaults to without --console-address.
+      MINIO_BROWSER: "off"
     command: ["server", "/data"]
     volumes:
       - storage-data:/data
@@ -133,6 +248,13 @@ services:
   # -- nginx is the only way to reach it (D5), unlike the storage above.
   # Declared whether or not IMAGE_PROVIDER names it, same as `storage`.
   transformer:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 512m
+    restart: unless-stopped
     image: darthsim/imgproxy:v4.0.14
     environment:
       IMGPROXY_KEY: ${IMAGE_SIGNING_KEY}
@@ -143,6 +265,26 @@ services:
       IMGPROXY_S3_ENDPOINT_USE_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+      # Explicit ceilings the transformer enforces on its own (image-
+      # delivery spec, task 6.2 in harden-local-profile): reaching it is
+      # reaching a resource with real CPU and memory cost behind it, and
+      # a signed address is valid for any object in the storage, not only
+      # the ones this project's own catalog ever requests.
+      IMGPROXY_MAX_SRC_RESOLUTION: ${TRANSFORMER_MAX_SRC_RESOLUTION}
+      IMGPROXY_MAX_SRC_FILE_SIZE: ${TRANSFORMER_MAX_SRC_FILE_SIZE}
+      # 2048 -- the catalog's own largest variant (backend/src/images/
+      # catalog.py, Variant.VIEWER): a hard ceiling on top of it, not a
+      # duplicate of it, so a future catalog entry that forgets to stay
+      # under it fails loudly instead of quietly serving something bigger.
+      IMGPROXY_MAX_RESULT_DIMENSION: ${TRANSFORMER_MAX_RESULT_DIMENSION}
+      IMGPROXY_WORKERS_NUMBER: ${TRANSFORMER_WORKERS}
+      IMGPROXY_DOWNLOAD_TIMEOUT: ${TRANSFORMER_DOWNLOAD_TIMEOUT_SECONDS}
+      # Read access limited to the albums prefix (object-storage spec):
+      # a signature covers only the object identity and the content
+      # type, never which prefix it lives under, so this is the one
+      # place that keeps a filtered signature from reaching the rest of
+      # the bucket.
+      IMGPROXY_ALLOWED_SOURCES: s3://${MINIO_BUCKET}/albums/*
     depends_on:
       storage:
         condition: service_healthy
@@ -153,10 +295,34 @@ services:
   # the frontend. The only service here whose published port the application
   # is opened on.
   nginx:
+    # Explicit ceiling and restart policy (local-environment spec,
+    # task 6.3 in harden-local-profile): the services share one
+    # machine, so none of them is left free to take all its memory,
+    # and each one says on its own whether it comes back after
+    # ending unexpectedly.
+    mem_limit: 128m
+    restart: unless-stopped
     build:
       context: ./nginx
     ports:
       - "${NGINX_PORT}:80"
+    environment:
+      # Where its own storage server block matches an incoming Host
+      # (nginx/entrypoint.sh derives the bare hostname from this; object-
+      # storage spec, D1). The same value the backend receives as
+      # MINIO_BROWSER_ENDPOINT above, so the two always name the same
+      # hostname.
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
+      # Rate and connection limiting by client address (request-
+      # throttling spec, D3, D11 in harden-local-profile's design):
+      # substituted into nginx's own config at start (nginx/entrypoint.sh).
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED}
+      API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE}
+      API_RATE_LIMIT_BURST: ${API_RATE_LIMIT_BURST}
+      GRANTS_RATE_LIMIT_PER_MINUTE: ${GRANTS_RATE_LIMIT_PER_MINUTE}
+      GRANTS_RATE_LIMIT_BURST: ${GRANTS_RATE_LIMIT_BURST}
+      API_MAX_CONNECTIONS_PER_IP: ${API_MAX_CONNECTIONS_PER_IP}
+      RATE_LIMIT_RETRY_AFTER_SECONDS: ${RATE_LIMIT_RETRY_AFTER_SECONDS}
     volumes:
       # The images cache (D12 in add-media-ports-and-local-adapters): a
       # volume, not an anonymous layer, so it survives a container
@@ -165,8 +331,19 @@ services:
     networks:
       - pixpick
 
+# Fixed to the same subnet and container range as compose.yaml's own
+# (request-throttling spec, D4): nginx/nginx.conf and backend/src/main.py
+# hardcode the container range as the only trusted peer for a declared
+# client address, and `ip_range` is what keeps a connection arriving
+# through this file's own published port -- which shows up as the
+# gateway address, .1 -- from falling inside it (task 2.3).
 networks:
   pixpick:
+    ipam:
+      config:
+        - subnet: 172.30.238.0/24
+          ip_range: 172.30.238.128/25
+          gateway: 172.30.238.1
 
 volumes:
   postgres-data:

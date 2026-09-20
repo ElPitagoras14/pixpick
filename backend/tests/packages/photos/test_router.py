@@ -1,14 +1,17 @@
+import uuid as uuid_module
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 
+from src.exceptions import ValidationFailedError
 from src.packages.albums import service as albums_service
 from src.packages.albums.config import albums_settings
 from src.packages.photos import repository
 from src.packages.photos import service as photos_service
 from src.packages.photos.schemas import GrantFileInput
 from src.packages.photos.warmup import warm_up_variants
+from src.packages.quota import repository as quota_repository
 from src.packages.ratings import service as ratings_service
 from src.packages.shares import service as shares_service
 from tests.authhelpers import log_in
@@ -49,6 +52,42 @@ async def test_an_oversized_file_rejects_the_whole_batch(client, connection, fak
 
     assert response.status_code == 422
     assert response.json()["error"]["field"] == "files.0.size"
+
+
+@pytest.mark.parametrize("size", [-1, 0])
+async def test_a_non_positive_size_is_rejected_naming_the_field(
+    client, connection, fake_storage, size
+):
+    """Task 1.1: a negative or zero declared size doesn't describe any
+    possible file and, subtracted from what's available, would grow it
+    instead of consuming it (photo-upload spec, D5)."""
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(
+        f"/api/albums/{album.id}/photos/grants",
+        json={"files": [{**_ONE_FILE, "size": size}]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["field"] == "files.0.size"
+    assert fake_storage._grants == {}
+
+
+@pytest.mark.parametrize("field", ["width", "height"])
+async def test_an_excessive_dimension_is_rejected_naming_the_field(
+    client, connection, fake_storage, field
+):
+    owner = await log_in(client, connection)
+    album = await create_album(connection, owner_id=owner.id)
+
+    response = client.post(
+        f"/api/albums/{album.id}/photos/grants",
+        json={"files": [{**_ONE_FILE, field: 999_999}]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["field"] == f"files.0.{field}"
 
 
 async def test_a_batch_over_fifty_is_rejected_before_granting_anything(client, connection):
@@ -194,6 +233,64 @@ async def test_freeing_space_re_enables_granting(committed_connection, fake_stor
     )
     assert len(result.granted) == 1
     assert result.denied == []
+
+
+async def test_a_non_positive_size_in_the_service_rejects_the_batch_without_touching_quotas(
+    committed_connection, fake_storage
+):
+    """Task 1.2: `_validate_files` is the defense that still holds for a
+    caller that builds `GrantFileInput` directly, bypassing the router's
+    own schema constraint (task 1.1) -- the batch is rejected whole, the
+    file responsible is named, and neither the account's nor the
+    instance's consumption moves (photo-upload spec)."""
+    owner = await create_user(committed_connection)
+    album = await create_album(committed_connection, owner_id=owner.id)
+    await committed_connection.commit()
+
+    before_account = await quota_repository.account_used_bytes(
+        committed_connection, owner_id=owner.id
+    )
+    before_instance = await quota_repository.instance_used_bytes(committed_connection)
+
+    files = [
+        GrantFileInput(content_type="image/jpeg", size=1_000, width=None, height=None),
+        GrantFileInput(content_type="image/jpeg", size=-1, width=None, height=None),
+    ]
+    with pytest.raises(ValidationFailedError) as excinfo:
+        await photos_service.grant_batch(
+            committed_connection, album_id=album.id, owner_id=owner.id, files=files
+        )
+    assert excinfo.value.field == "files.1.size"
+
+    after_account = await quota_repository.account_used_bytes(
+        committed_connection, owner_id=owner.id
+    )
+    after_instance = await quota_repository.instance_used_bytes(committed_connection)
+    assert after_account == before_account
+    assert after_instance == before_instance
+
+
+async def test_confirming_more_than_the_batch_ceiling_is_rejected_without_querying_storage(
+    client, committed_connection, fake_storage, monkeypatch
+):
+    """Task 1.4: the same ceiling as granting (photo-upload spec, ADDED
+    requirement) -- a lot above it fails as a validation error before any
+    photo is looked up in storage."""
+    owner = await create_user(committed_connection)
+    album = await create_album(committed_connection, owner_id=owner.id)
+    _, token = await create_session(committed_connection, user_id=owner.id)
+    await committed_connection.commit()
+    client.cookies.set("session", token)
+
+    async def _boom(*, object_key):
+        raise AssertionError("storage SHALL NOT be consulted for a rejected batch")
+
+    monkeypatch.setattr(fake_storage, "get_object", _boom)
+
+    photo_ids = [str(uuid_module.uuid4()) for _ in range(51)]
+    response = client.post(f"/api/albums/{album.id}/photos/confirm", json={"photoIds": photo_ids})
+
+    assert response.status_code == 422
 
 
 async def test_granting_for_a_foreign_album_responds_like_a_nonexistent_one(

@@ -23,13 +23,13 @@ docker compose -f compose.dev.yaml up --build
 
 Then open `http://localhost:8080`. The port comes from `NGINX_PORT` in `.env`.
 
-That one command starts everything: `postgres`, `storage`, `transformer`, `backend`, `frontend` and `nginx`. It also applies the database migrations and creates the bucket the photos go into. There is no other step.
+That one command starts everything: `postgres`, `storage`, `transformer`, `backend`, `frontend`, `nginx` and `reconciler`. It also applies the database migrations and creates the bucket the photos go into. There is no other step.
 
 Add `--build` after you change the code. Without it, Compose starts the image it built before.
 
 ### The two compose files
 
-There are two ways to start the same seven services. Each one is written in full, in its own file:
+There are two ways to start the same eight services. Each one is written in full, in its own file:
 
 | File | What it does | How you start it |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ There are two ways to start the same seven services. Each one is written in full
 
 Use `compose.dev.yaml` to work on the project. Every command on this page that builds or opens a port names it.
 
-The two files are never mixed. Each one lists all seven services with everything they need, so you can read either one on its own. They say the same thing except for where each image comes from and which ports are open.
+The two files are never mixed. Each one lists all eight services with everything they need, so you can read either one on its own. They say the same thing except for where each image comes from and which ports are open.
 
 ### See what each service gets
 
@@ -148,6 +148,8 @@ See the values a service really got:
 docker compose -f compose.dev.yaml config
 ```
 
+A request rejected with `"code": "rate_limited"` or `"insufficient_capacity"` means the rate limit or the database's own connection pool got in the way, not that anything you sent was wrong -- the response says how long to wait. Set `RATE_LIMIT_ENABLED=false` in `.env` and restart `nginx` if you want to hammer the API during development without it getting in the way; it does not remove the limit from `nginx`'s own config, only raises it past anything a real client would reach.
+
 List what is in the local storage:
 
 ```bash
@@ -160,14 +162,14 @@ docker run --rm --network pixpick_pixpick --entrypoint sh \
 
 Change the user and the password if you changed them in `.env`.
 
-An upload that never finishes, or an album whose plazo has run out, leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows either one. Clean it up when you want:
+An upload that never finishes, or an album whose plazo has run out, leaves something behind in `postgres` and, sometimes, a file in `storage`. The app never shows either one, and the `reconciler` service discards both on its own, every `RECONCILE_INTERVAL_SECONDS` — five minutes by default. You can still run it by hand, for instance right after testing an expiry instead of waiting out the interval:
 
 ```bash
 cd backend
 uv run python -m src.maintenance.reconcile
 ```
 
-Running it discards both: abandoned uploads and expired albums, with their photos and objects. Not running it costs nothing but space at the storage provider — nobody can see or count against their quota what it would have discarded.
+Running it discards both: abandoned uploads and expired albums, with their photos and objects. This matters more than it looks: `storage`, `postgres` and the image cache all share one disk in this profile, so what this discards is what keeps that disk from filling up and taking the whole instance down with it, not just an unbilled difference at a storage provider.
 
 ## Run the tests
 
@@ -214,17 +216,34 @@ pixpick/
 
 | Service | What it does | Open on your machine |
 | --- | --- | --- |
-| `nginx` | Sends `/api` to the backend, `/images` to the transformer, and the rest to the frontend | Yes, on `NGINX_PORT` |
+| `nginx` | Sends `/api` to the backend, `/images` to the transformer, its own storage hostname to `storage`, and everything else to the frontend | Yes, on `NGINX_PORT` |
 | `backend` | The API, under `/api` | No |
 | `frontend` | The app | No |
 | `postgres` | The database | Yes, on `POSTGRES_PORT` |
-| `storage` | Where the photos are kept | Yes, on `MINIO_PORT` |
+| `storage` | Where the photos are kept | Yes, on `MINIO_PORT` (native mode and debugging only -- see below) |
 | `transformer` | Makes the small versions of each photo | No |
 | `migrate` | Applies the database migrations once, then exits | No |
+| `reconciler` | Discards abandoned uploads and expired albums on a schedule | No |
 
-The browser only talks to `nginx`. `storage` is the one exception: the browser sends each photo straight to it.
+The browser only talks to `nginx`. `storage` used to be the one exception, reached straight from the browser on its own port; it no longer is, now that nginx sits in front of it too (see "The storage's own address" below). `MINIO_PORT` still publishes `storage`'s own port, but only for native mode and the debugging commands further down this page -- the browser itself never uses it in containers mode.
 
-Both files declare all seven. `storage` and `transformer` start even when `STORAGE_PROVIDER` and `IMAGE_PROVIDER` name a cloud provider. Those two variables decide who the app talks to, not which containers run.
+Both files declare all eight. `storage` and `transformer` start even when `STORAGE_PROVIDER` and `IMAGE_PROVIDER` name a cloud provider. Those two variables decide who the app talks to, not which containers run.
+
+### The storage's own address
+
+The browser writes photos straight to `storage`, bypassing the backend entirely -- but even that write goes through `nginx`, not straight to the `storage` container, so that nginx can cap how much a single upload can write (`client_max_body_size`, derived from the backend's own per-file maximum) before it ever reaches the storage. `nginx` tells the two apart by hostname, matching the `Host` header the browser sent against `STORAGE_PUBLIC_URL`: a request for the app's own hostname goes to the backend or the frontend, and a request for `STORAGE_PUBLIC_URL`'s hostname goes to `storage`.
+
+That means `STORAGE_PUBLIC_URL` needs a real hostname to match against -- a bare IP address is not enough on its own, because nginx would have no way to tell "this is for the app" from "this is for storage" if both arrived under the same address. Three ways to get one, depending on how you're reaching the instance:
+
+- **A real domain.** If you're behind a platform proxy (Dokploy or otherwise) that already terminates TLS for `PUBLIC_URL`'s own domain, give it a second domain for storage -- a subdomain such as `storage.yourdomain.com` is the usual pattern -- pointed at the same `nginx` service. Set `STORAGE_PUBLIC_URL` to that, with `https://`.
+- **`storage.localhost`, for local development.** This is `.env.example`'s own default. Every major browser resolves anything ending in `.localhost` straight to your own machine on its own, with no `/etc/hosts` entry and no DNS server needed.
+- **An sslip.io/nip.io hostname, for a private or VPN address with no domain of its own.** These free services resolve a hostname that encodes an IP address to that same address, so nothing but the lookup itself leaves your network -- the app's own traffic still goes directly over your LAN or VPN, exactly as it would with a real domain. For a machine at `192.168.1.50`, set `STORAGE_PUBLIC_URL=http://storage.192-168-1-50.sslip.io:8080` (replace the dots in the IP with dashes; keep `:8080`, or whatever `NGINX_PORT` you're using, at the end). This is the way to reach the instance by a bare private address without editing a hosts file on every device that opens it.
+
+Whichever you pick, it's the only value that changes -- `nginx`'s own configuration and the rest of `.env` stay exactly the same.
+
+### The rate limit and your CDN
+
+`nginx` limits how many requests it accepts from the same address per minute (`API_RATE_LIMIT_PER_MINUTE`, and the stricter `GRANTS_RATE_LIMIT_PER_MINUTE` for asking to upload a photo). If you put a CDN in front of the instance, configure a matching rate limit rule there too: `nginx`'s own counters live in memory and reset every time it restarts, while a CDN's own layer sits in front of that restart and does not. Match the CDN's rule to whichever of the two values in `.env` is stricter for the path it applies to, so a client that would be rejected here is rejected there first instead, before the request ever reaches your instance.
 
 ### The backend (`backend/`)
 
