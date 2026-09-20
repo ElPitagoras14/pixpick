@@ -25,13 +25,14 @@ class AlbumsSettings(BaseSettings):
     # 1/720 of a day, not expressible as a whole one.
     album_retention_days: float = 30
 
-    # Without a max, the only ceiling on either field was whatever body the
-    # entry point accepts -- a number nobody chose for this, and one that
-    # travels back on every album listing (album-management spec, harden-
-    # local-profile task 1.5). Holdover values, generous for the product
-    # and bounded against abuse.
-    album_title_max_length: int = 200
-    album_description_max_length: int = 2000
-
 
 albums_settings = AlbumsSettings()  # type: ignore[call-arg]
+
+# Without a max, the only ceiling on either field was whatever body the
+# entry point accepts -- a number nobody chose for this, and one that
+# travels back on every album listing (album-management spec, harden-
+# local-profile task 1.5). Holdover values, generous for the product and
+# bounded against abuse -- fixed, not configurable: nothing about an
+# environment makes a longer title or description legitimate.
+ALBUM_TITLE_MAX_LENGTH = 200
+ALBUM_DESCRIPTION_MAX_LENGTH = 2000

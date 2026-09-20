@@ -5,11 +5,11 @@ Gobierna cuánta carga admite la instancia por cliente y qué hace cuando no pue
 
 ## Requirements
 
-### Requirement: La cantidad de peticiones que un cliente puede hacer tiene un techo configurable
+### Requirement: La cantidad de peticiones que un cliente puede hacer tiene un techo fijo
 
-El sistema SHALL limitar cuántas peticiones admite de un mismo cliente por unidad de tiempo, y el techo SHALL declararse en la configuración del entorno. SHALL existir un techo general y un techo propio, más estricto, para las operaciones que consumen recursos del almacenamiento o del transformador. Superar un techo SHALL rechazar la petición sin ejecutarla.
+El sistema SHALL limitar cuántas peticiones admite de un mismo cliente por unidad de tiempo, con un techo fijo en el código y no declarado en la configuración del entorno: ningún despliegue de este proyecto ha necesitado un valor distinto del otro. SHALL existir un techo general y un techo propio, más estricto, para las operaciones que consumen recursos del almacenamiento o del transformador. Superar un techo SHALL rechazar la petición sin ejecutarla.
 
-El límite SHALL poder desactivarse por configuración, porque el entorno de desarrollo y la suite de pruebas necesitan ejercitar el sistema sin que un techo pensado para internet les corte el paso.
+El límite SHALL estar siempre activo. SHALL NOT existir una forma de desactivarlo por configuración: quien necesite ejercitar el sistema sin él edita el valor fijo en el código en vez de apagarlo por una variable de entorno.
 
 #### Scenario: Un cliente por debajo del techo no se ve afectado
 
@@ -27,11 +27,6 @@ El límite SHALL poder desactivarse por configuración, porque el entorno de des
 - **WHEN** un cliente pide concesiones de subida a un ritmo que respeta el techo general pero supera el propio de esa operación
 - **THEN** la petición se rechaza
 - **AND** las peticiones de otro tipo del mismo cliente siguen atendiéndose
-
-#### Scenario: El techo se puede desactivar
-
-- **WHEN** la configuración desactiva el límite y se hacen peticiones a cualquier ritmo
-- **THEN** ninguna se rechaza por carga
 
 ### Requirement: El límite se aplica antes de tomar cualquier recurso escaso
 

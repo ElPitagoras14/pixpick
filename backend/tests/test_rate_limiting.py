@@ -1,8 +1,8 @@
 """Real stack only (request-throttling spec, api-conventions spec, tasks
 4.1-4.3): requires `docker compose -f compose.dev.yaml up -d --build`
-already running with RATE_LIMIT_ENABLED=true and the default limits from
-.env.example (API_RATE_LIMIT_PER_MINUTE=600, API_RATE_LIMIT_BURST=50,
-GRANTS_RATE_LIMIT_PER_MINUTE=30, GRANTS_RATE_LIMIT_BURST=5).
+already running. The limits are fixed in nginx/nginx.conf.template, not
+configurable: 600 requests/minute general (burst 50), 30 requests/minute
+for grants (burst 5).
 
 Exercised over real concurrent HTTP against nginx, not through Python:
 what is under test is nginx's own `limit_req` zones and the JSON body it

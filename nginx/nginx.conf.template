@@ -36,14 +36,12 @@ real_ip_header X-Forwarded-For;
 # before anything reaches the backend (request-throttling spec, D3):
 # a general ceiling over the whole API space, and a stricter one over
 # granting uploads specifically, the operation that costs the most
-# (D3). RATE_LIMIT_ENABLED=false (entrypoint.sh) raises the numbers
-# substituted below to a rate and a connection cap high enough that
-# nothing a real client does ever reaches them, rather than the zones or
-# the `limit_req`/`limit_conn` directives being conditionally present or
-# absent -- nginx has no way to express "this zone doesn't exist" from a
-# single template without duplicating every location that uses one.
-limit_req_zone $binary_remote_addr zone=api_rate:10m rate=${API_RATE_LIMIT_PER_MINUTE}r/m;
-limit_req_zone $binary_remote_addr zone=grants_rate:10m rate=${GRANTS_RATE_LIMIT_PER_MINUTE}r/m;
+# (D3). Fixed values, not substituted from the environment (simplify-
+# rate-limit-config): none of them varied by deployment in practice, and
+# whoever needs a different ceiling in development edits the numbers
+# below directly instead of toggling them off by configuration.
+limit_req_zone $binary_remote_addr zone=api_rate:10m rate=600r/m;
+limit_req_zone $binary_remote_addr zone=grants_rate:10m rate=30r/m;
 limit_conn_zone $binary_remote_addr zone=api_conn:10m;
 
 # 429, not the default 503 (request-throttling spec, api-conventions
@@ -64,8 +62,8 @@ server {
 	# unchanged, prefix included, so the backend sees exactly what the
 	# browser sent.
 	location /api/ {
-		limit_req zone=api_rate burst=${API_RATE_LIMIT_BURST} nodelay;
-		limit_conn api_conn ${API_MAX_CONNECTIONS_PER_IP};
+		limit_req zone=api_rate burst=50 nodelay;
+		limit_conn api_conn 20;
 		error_page 429 = @rate_limited;
 
 		set $backend_upstream backend:8000;
@@ -90,9 +88,9 @@ server {
 	# (no `^~` on that one), so this location's own directives apply
 	# instead of -- not in addition to -- an equivalent duplicate here.
 	location ~ ^/api/albums/[^/]+/photos/grants$ {
-		limit_req zone=api_rate burst=${API_RATE_LIMIT_BURST} nodelay;
-		limit_req zone=grants_rate burst=${GRANTS_RATE_LIMIT_BURST} nodelay;
-		limit_conn api_conn ${API_MAX_CONNECTIONS_PER_IP};
+		limit_req zone=api_rate burst=50 nodelay;
+		limit_req zone=grants_rate burst=5 nodelay;
+		limit_conn api_conn 20;
 		error_page 429 = @rate_limited;
 
 		set $backend_upstream backend:8000;
@@ -113,8 +111,8 @@ server {
 	# holding exactly what a null field looks like once serialized.
 	location @rate_limited {
 		default_type application/json;
-		add_header Retry-After ${RATE_LIMIT_RETRY_AFTER_SECONDS} always;
-		return 429 '{"data":null,"error":{"code":"rate_limited","message":"too many requests; please retry shortly","field":null,"requestId":null,"details":null,"retryAfterSeconds":${RATE_LIMIT_RETRY_AFTER_SECONDS}}}';
+		add_header Retry-After 5 always;
+		return 429 '{"data":null,"error":{"code":"rate_limited","message":"too many requests; please retry shortly","field":null,"requestId":null,"details":null,"retryAfterSeconds":5}}';
 	}
 
 	# The images space (image-delivery spec): proxied to the transformer,
