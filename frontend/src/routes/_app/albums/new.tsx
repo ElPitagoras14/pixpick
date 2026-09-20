@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 
 import { ApiRequestError } from "@/api";
@@ -47,6 +47,15 @@ function NewAlbum() {
 
 	return (
 		<div className="mx-auto max-w-sm p-6">
+			{/* The header button covers mobile; desktop had no way out of
+			this screen at all (design.md D on albums/new.tsx). */}
+			<Link
+				to="/albums"
+				search={{ group: "own" }}
+				className="hidden text-muted-foreground text-xs md:block"
+			>
+				← Albums
+			</Link>
 			<h1 className="mb-6 text-xl font-bold">New album</h1>
 			<form onSubmit={handleSubmit} className="flex flex-col gap-4">
 				<div className="flex flex-col gap-1.5">
