@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Link,
@@ -7,7 +7,9 @@ import {
 } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
-import { albumQueryOptions, remainingTimeLabel } from "@/features/albums/api";
+import { AlbumHeader } from "@/features/albums/AlbumHeader";
+import { albumQueryOptions } from "@/features/albums/api";
+import { albumStatsQueryOptions } from "@/features/gallery/api";
 import { ShareDialog } from "@/features/shares/ShareDialog";
 
 // The album is loaded once, here (D11): the grid, the upload view, and
@@ -34,10 +36,19 @@ function AlbumLayout() {
 	// every subview, above the title, the way it is on every other screen
 	// -- so there can never be two of them, or one below the title.
 	const isUploadView = !!matchRoute({ to: "/albums/$albumId/upload" });
+	// Its own query, mounted here rather than lifted from the gallery (D1):
+	// react-query resolves both consumers against the same cache entry.
+	// `enabled` only stops the request (D2, album-stats spec: owner-only);
+	// whether the summary is shown is decided by `isAlbumView` below, not
+	// by whether it happens to already be in cache from a prior visit.
+	const { data: stats } = useQuery({
+		...albumStatsQueryOptions(albumId),
+		enabled: album.isOwner && isAlbumView,
+	});
 
 	return (
 		<div className="mx-auto max-w-3xl p-6">
-			<div className="mb-6 flex items-center justify-between gap-4">
+			<div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 				<div>
 					{isAlbumView ? (
 						<Link
@@ -57,20 +68,14 @@ function AlbumLayout() {
 							← Back to album
 						</Link>
 					)}
-					<h1 className="text-xl font-bold">{album.title}</h1>
-					{album.description && (
-						<p className="text-muted-foreground text-sm">{album.description}</p>
-					)}
-					<p className="text-muted-foreground text-xs">
-						{remainingTimeLabel(album.expiresAt)}
-					</p>
+					<AlbumHeader album={album} stats={isAlbumView ? stats : undefined} />
 				</div>
 				{!isUploadView && (
 					<div className="flex items-center gap-2">
 						{album.isOwner && (
 							<>
 								<ShareDialog albumId={albumId} />
-								<Button asChild size="sm">
+								<Button asChild className="h-11 md:h-7" size="sm">
 									<Link to="/albums/$albumId/upload" params={{ albumId }}>
 										Upload photos
 									</Link>
@@ -78,7 +83,12 @@ function AlbumLayout() {
 							</>
 						)}
 						{album.pendingCount > 0 && (
-							<Button asChild size="sm" variant="secondary">
+							<Button
+								asChild
+								className="h-11 md:h-7"
+								size="sm"
+								variant="secondary"
+							>
 								<Link to="/albums/$albumId/swipe" params={{ albumId }}>
 									Rate {album.pendingCount} photo
 									{album.pendingCount === 1 ? "" : "s"}

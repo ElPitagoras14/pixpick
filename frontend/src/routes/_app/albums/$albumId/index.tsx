@@ -105,24 +105,11 @@ function AlbumGallery() {
 	return (
 		<div>
 			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-				<div className="flex flex-col gap-1">
-					<GalleryTabs
-						albumId={albumId}
-						active={filter}
-						counts={gallery.counts}
-					/>
-					{/* Only exists for the owner (task 4.3, D8): never shown
-					empty to anyone else, since for them this isn't a zone
-					that failed to load -- it simply isn't there. */}
-					{album.isOwner && stats && (
-						<p className="text-muted-foreground text-xs">
-							{stats.participantCount} participant
-							{stats.participantCount === 1 ? "" : "s"} · {stats.ratingCount}{" "}
-							rating
-							{stats.ratingCount === 1 ? "" : "s"}
-						</p>
-					)}
-				</div>
+				<GalleryTabs
+					albumId={albumId}
+					active={filter}
+					counts={gallery.counts}
+				/>
 				{album.isOwner && (
 					<Button
 						variant="destructive"

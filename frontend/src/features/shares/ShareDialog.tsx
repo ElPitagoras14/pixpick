@@ -26,7 +26,12 @@ export function ShareDialog({ albumId }: { albumId: string }) {
 
 	return (
 		<>
-			<Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+			<Button
+				className="h-11 md:h-7"
+				variant="outline"
+				size="sm"
+				onClick={() => setOpen(true)}
+			>
 				Share
 			</Button>
 			<Dialog open={open} onOpenChange={setOpen}>
