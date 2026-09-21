@@ -223,7 +223,15 @@ jobs:
         # carries the version only as the name this deployment gets on the
         # platform's own history.
         run: |
-          curl -fsS -X POST https://dokploy.pitagoraslab.qzz.io/api/compose.deploy \
+          # A key pasted with a trailing newline would reach curl as a
+          # malformed header and come back as a rejected credential, which
+          # reads exactly like a wrong key. Same treatment VERSION gets.
+          key="$(printf '%s' "$DOKPLOY_API_KEY" | tr -d '[:space:]')"
+          # --fail-with-body rather than -f: the call still fails the step,
+          # but the platform's own explanation reaches the log instead of a
+          # bare exit code.
+          curl --fail-with-body -sS -X POST https://dokploy.pitagoraslab.qzz.io/api/compose.deploy \
+            -H 'Accept: application/json' \
             -H 'Content-Type: application/json' \
-            -H "x-api-key: $DOKPLOY_API_KEY" \
+            -H "x-api-key: $key" \
             -d "$(printf '{"composeId":"%s","title":"Release %s","description":"Triggered by the release workflow"}' "$DOKPLOY_COMPOSE_ID" "$VERSION")"
