@@ -23,7 +23,7 @@ docker compose -f compose.dev.yaml up --build
 
 Then open `http://localhost:8080`. The port comes from `NGINX_PORT` in `.env`.
 
-That one command starts everything: `postgres`, `storage`, `transformer`, `backend`, `frontend`, `nginx` and `reconciler`. It also applies the database migrations and creates the bucket the photos go into. There is no other step.
+That one command starts everything: `postgres`, `storage`, `transformer`, `pixpick-backend`, `pixpick-frontend`, `pixpick-nginx` and `reconciler`. It also applies the database migrations and creates the bucket the photos go into. There is no other step.
 
 Add `--build` after you change the code. Without it, Compose starts the image it built before.
 
@@ -61,7 +61,7 @@ Add `-v` to also delete the database and the stored photos.
 You can run those two outside Docker. The other services keep running in Docker:
 
 ```bash
-docker compose -f compose.dev.yaml up -d postgres migrate storage transformer nginx
+docker compose -f compose.dev.yaml up -d postgres pixpick-migrate storage transformer pixpick-nginx
 
 cd backend
 uv sync
@@ -139,7 +139,7 @@ To go back, set `STORAGE_PROVIDER` to the old value. Keep the old content until 
 Read the logs of one service:
 
 ```bash
-docker compose -f compose.dev.yaml logs -f backend
+docker compose -f compose.dev.yaml logs -f pixpick-backend
 ```
 
 See the values a service really got:
@@ -148,7 +148,7 @@ See the values a service really got:
 docker compose -f compose.dev.yaml config
 ```
 
-A request rejected with `"code": "rate_limited"` or `"insufficient_capacity"` means the rate limit or the database's own connection pool got in the way, not that anything you sent was wrong -- the response says how long to wait. The rate limit is fixed, not something you toggle from `.env`; if you need to hammer the API during development without it getting in the way, edit the numbers directly in `nginx/nginx.conf.template` and rebuild `nginx`.
+A request rejected with `"code": "rate_limited"` or `"insufficient_capacity"` means the rate limit or the database's own connection pool got in the way, not that anything you sent was wrong -- the response says how long to wait. The rate limit is fixed, not something you toggle from `.env`; if you need to hammer the API during development without it getting in the way, edit the numbers directly in `nginx/nginx.conf.template` and rebuild `pixpick-nginx`.
 
 List what is in the local storage:
 
@@ -174,13 +174,13 @@ It discards abandoned uploads and expired albums, with their photos and objects.
 ## Run the tests
 
 ```bash
-docker compose -f compose.dev.yaml up -d postgres storage transformer nginx
+docker compose -f compose.dev.yaml up -d postgres storage transformer pixpick-nginx
 cd backend
 uv sync
 uv run pytest
 ```
 
-Some tests talk to the real `storage`, `transformer` and `nginx` services. That is why they have to be up.
+Some tests talk to the real `storage`, `transformer` and `pixpick-nginx` services. That is why they have to be up.
 
 The tests use their own database, next to the one you develop with. Its name is `<POSTGRES_DB>_test`. The tests create it and migrate it on the first run. You clean up nothing between runs.
 
@@ -216,36 +216,36 @@ pixpick/
 
 | Service | What it does | Open on your machine |
 | --- | --- | --- |
-| `nginx` | Sends `/api` to the backend, `/images` to the transformer, its own storage hostname to `storage`, and everything else to the frontend | Yes, on `NGINX_PORT` |
-| `backend` | The API, under `/api` | No |
-| `frontend` | The app | No |
+| `pixpick-nginx` | Sends `/api` to the backend, `/images` to the transformer, its own storage hostname to `storage`, and everything else to the frontend | Yes, on `NGINX_PORT` |
+| `pixpick-backend` | The API, under `/api` | No |
+| `pixpick-frontend` | The app | No |
 | `postgres` | The database | Yes, on `POSTGRES_PORT` |
 | `storage` | Where the photos are kept | Yes, on `MINIO_PORT` (native mode and debugging only -- see below) |
 | `transformer` | Makes the small versions of each photo | No |
-| `migrate` | Applies the database migrations once, then exits | No |
+| `pixpick-migrate` | Applies the database migrations once, then exits | No |
 | `reconciler` | Discards abandoned uploads and expired albums on a schedule | No |
 
-The browser only talks to `nginx`, including when it uploads a photo (see "The storage's own address" below). `MINIO_PORT` publishes `storage`'s own port for native mode and for the debugging commands further up this page; the browser never uses it in containers mode.
+The browser only talks to `pixpick-nginx`, including when it uploads a photo (see "The storage's own address" below). `MINIO_PORT` publishes `storage`'s own port for native mode and for the debugging commands further up this page; the browser never uses it in containers mode.
 
 Both files declare all eight. `storage` and `transformer` start even when `STORAGE_PROVIDER` and `IMAGE_PROVIDER` name a cloud provider. Those two variables decide who the app talks to, not which containers run.
 
 ### The storage's own address
 
-The browser writes photos to `storage` without going through the backend, but that write still goes through `nginx`, which caps how much one upload can write before it reaches the storage. `nginx` tells an upload from a request for the app by hostname: it matches the `Host` header against `STORAGE_PUBLIC_URL`, and everything else goes to the backend or the frontend.
+The browser writes photos to `storage` without going through the backend, but that write still goes through `pixpick-nginx`, which caps how much one upload can write before it reaches the storage. `pixpick-nginx` tells an upload from a request for the app by hostname: it matches the `Host` header against `STORAGE_PUBLIC_URL`, and everything else goes to the backend or the frontend.
 
 So `STORAGE_PUBLIC_URL` needs a hostname, not a bare IP address -- with both under the same address there is nothing for nginx to match on. Three ways to get one:
 
-- **A real domain.** Behind a platform proxy (Dokploy or otherwise) that already terminates TLS for `PUBLIC_URL`'s domain, give it a second domain for storage -- `storage.yourdomain.com` is the usual pattern -- pointed at the same `nginx` service. Set `STORAGE_PUBLIC_URL` to that, with `https://`.
+- **A real domain.** Behind a platform proxy (Dokploy or otherwise) that already terminates TLS for `PUBLIC_URL`'s domain, give it a second domain for storage -- `storage.yourdomain.com` is the usual pattern -- pointed at the same `pixpick-nginx` service. Set `STORAGE_PUBLIC_URL` to that, with `https://`.
 - **`storage.localhost`, for local development.** The default in `.env.example`. Every major browser resolves anything ending in `.localhost` to your own machine, with no `/etc/hosts` entry and no DNS server.
 - **An sslip.io or nip.io hostname, for a private or VPN address with no domain.** These resolve a hostname that encodes an IP address to that address, so only the lookup leaves your network. For a machine at `192.168.1.50`, set `STORAGE_PUBLIC_URL=http://storage.192-168-1-50.sslip.io:8080` -- dots in the IP become dashes, and the port is whatever `NGINX_PORT` you use.
 
-Whichever you pick, it is the only value that changes. `nginx`'s configuration and the rest of `.env` stay as they are.
+Whichever you pick, it is the only value that changes. `pixpick-nginx`'s configuration and the rest of `.env` stay as they are.
 
 ### The rate limit and your CDN
 
-`nginx` accepts 600 requests a minute from the same address, and 30 for asking to upload a photo. Both are fixed in `nginx/nginx.conf.template`, not in `.env`.
+`pixpick-nginx` accepts 600 requests a minute from the same address, and 30 for asking to upload a photo. Both are fixed in `nginx/nginx.conf.template`, not in `.env`.
 
-Put a CDN in front of the instance and you want a matching rule there too, at whichever of the two is stricter for the path: `nginx`'s counters live in memory and reset on every restart, so the CDN's rule is what holds across one.
+Put a CDN in front of the instance and you want a matching rule there too, at whichever of the two is stricter for the path: `pixpick-nginx`'s counters live in memory and reset on every restart, so the CDN's rule is what holds across one.
 
 ### The backend (`backend/`)
 

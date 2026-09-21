@@ -26,7 +26,7 @@ services:
 
   # `up`, not `migrate`: the database may not exist the first time, and `up`
   # creates it before migrating.
-  migrate:
+  pixpick-migrate:
     mem_limit: 256m
     restart: "no"
     build:
@@ -42,7 +42,7 @@ services:
     networks:
       - pixpick
 
-  backend:
+  pixpick-backend:
     mem_limit: 512m
     restart: unless-stopped
     build:
@@ -74,7 +74,7 @@ services:
       INSTANCE_MAX_BYTES: ${INSTANCE_MAX_BYTES}
       ALBUM_RETENTION_DAYS: ${ALBUM_RETENTION_DAYS}
     depends_on:
-      migrate:
+      pixpick-migrate:
         condition: service_completed_successfully
       storage:
         condition: service_healthy
@@ -110,14 +110,14 @@ services:
       R2_ENDPOINT: ${R2_ENDPOINT}
       ALBUM_RETENTION_DAYS: ${ALBUM_RETENTION_DAYS}
     depends_on:
-      migrate:
+      pixpick-migrate:
         condition: service_completed_successfully
       storage:
         condition: service_healthy
     networks:
       - pixpick
 
-  frontend:
+  pixpick-frontend:
     mem_limit: 128m
     restart: unless-stopped
     build:
@@ -188,7 +188,7 @@ services:
     networks:
       - pixpick
 
-  nginx:
+  pixpick-nginx:
     mem_limit: 128m
     restart: unless-stopped
     build:

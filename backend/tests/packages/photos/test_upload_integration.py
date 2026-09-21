@@ -1,7 +1,7 @@
 """End-to-end against the real storage, transformer and nginx: confirms
 that warming a variant after a batch is confirmed actually leaves it in
 nginx's own cache, not merely that the warm-up task didn't raise. Requires `docker
-compose -f compose.dev.yaml up -d storage transformer nginx` already
+compose -f compose.dev.yaml up -d storage transformer pixpick-nginx` already
 running, the same expectation `tests/storage/` and `tests/images/` already
 have.
 """
