@@ -26,9 +26,9 @@
 
 ## 5. Puesta en marcha
 
-- [ ] 5.1 Crear el proyecto en Dokploy, cargar `DOKPLOY_API_KEY` como secreto del repositorio y `DOKPLOY_COMPOSE_ID` como variable; verificar que ambos figuran en la configuración del repositorio antes de integrar
-- [ ] 5.2 Integrar y verificar la primera corrida: los cuatro paquetes existen con las etiquetas `0.1.0` y `latest`, el tag `0.1.0` está en el repositorio, y el despliegue recibió la llamada
-- [ ] 5.3 Verificar que los cuatro paquetes son públicos con una consulta anónima al registro, sin credenciales
+- [x] 5.1 Crear el proyecto en Dokploy, cargar `DOKPLOY_API_KEY` como secreto del repositorio y `DOKPLOY_COMPOSE_ID` como variable; verificar que ambos figuran en la configuración del repositorio antes de integrar
+- [x] 5.2 Integrar y verificar la primera corrida: los cuatro paquetes existen con las etiquetas `0.1.0` y `latest`, el tag `0.1.0` está en el repositorio, y el despliegue recibió la llamada
+- [x] 5.3 Verificar que los cuatro paquetes son públicos con una consulta anónima al registro, sin credenciales
 
 ## 6. Verificación del comportamiento de reutilización
 
