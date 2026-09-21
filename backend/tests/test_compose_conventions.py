@@ -26,9 +26,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PUBLISHED = _REPO_ROOT / "compose.yaml"
 _BUILT = _REPO_ROOT / "compose.dev.yaml"
 
-# The only two fields a service is allowed to declare differently. Every
-# other key is compared verbatim.
-_MAY_DIFFER = frozenset({"image", "build", "ports"})
+# The only fields a service is allowed to declare differently: where its
+# image comes from, and which ports reach the host. `pull_policy` belongs
+# to the first of those -- it decides how a pulled tag is refreshed, and
+# compose.dev.yaml builds the project's own services from source instead.
+_MAY_DIFFER = frozenset({"image", "build", "pull_policy", "ports"})
 
 # `pixpick-migrate` alone may also differ on these two: compose.dev.yaml already
 # assumes the repo is checked out to build the image from source, so it also
@@ -119,6 +121,25 @@ def test_a_third_party_image_is_pinned_to_the_same_version_in_both(published, bu
     assert not offenders, (
         "a third-party image is pinned to different versions in the two declarations:\n"
         + "\n".join(offenders)
+    )
+
+
+def test_a_tag_that_moves_is_pulled_on_every_up(published):
+    """A release publishes the project's images under the same names
+    again, so those tags name a different build over time. `docker
+    compose` reuses a tag it already holds locally, which leaves a host
+    serving whatever it pulled first through every redeploy after it --
+    silently, because the tag it reports is still the right one."""
+    offenders = [
+        f"  {name}: {service['image']!r} declares pull_policy "
+        f"{service.get('pull_policy', 'nothing')!r}"
+        for name, service in published["services"].items()
+        if str(service.get("image", "")).endswith(":latest")
+        and service.get("pull_policy") != "always"
+    ]
+    assert not offenders, (
+        "a service names a tag that moves without asking for it to be pulled "
+        "again; the host would keep the build it already has:\n" + "\n".join(offenders)
     )
 
 

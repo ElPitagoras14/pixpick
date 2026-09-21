@@ -1,8 +1,11 @@
 # Pulls the project's four images by tag and publishes no port: the
 # platform's proxy reaches them over this network. Complete on its own,
 # never combined with compose.dev.yaml. Every service declares a memory
-# ceiling and a restart policy, because they share one machine. No workflow
-# publishes these tags yet, so this file cannot start those four.
+# ceiling and a restart policy, because they share one machine. Those four
+# move under a tag that stays put, so each one pulls on every `up`:
+# `docker compose` reuses a tag it already holds locally, and a host that
+# pulled one of them once would keep serving that build through every
+# redeploy after it.
 services:
   postgres:
     mem_limit: 512m
@@ -28,6 +31,7 @@ services:
     mem_limit: 256m
     restart: "no"
     image: ghcr.io/elpitagoras14/pixpick-migrate:latest
+    pull_policy: always
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     command: ["--no-dump-schema", "up"]
@@ -41,6 +45,7 @@ services:
     mem_limit: 512m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-backend:latest
+    pull_policy: always
     environment:
       ENVIRONMENT: ${ENVIRONMENT}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -83,6 +88,7 @@ services:
     mem_limit: 256m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-backend:latest
+    pull_policy: always
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -116,6 +122,7 @@ services:
     mem_limit: 128m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-frontend:latest
+    pull_policy: always
     environment:
       ENVIRONMENT: ${ENVIRONMENT}
       API_BASE_URL: ${API_BASE_URL}
@@ -183,11 +190,17 @@ services:
     mem_limit: 128m
     restart: unless-stopped
     image: ghcr.io/elpitagoras14/pixpick-nginx:latest
+    pull_policy: always
     environment:
       # nginx/entrypoint.sh derives its storage server block's hostname from
       # this. The same value the backend gets as MINIO_BROWSER_ENDPOINT, so
       # the two can never differ.
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
+      # Empty unless a platform's own proxy stands in front: only the
+      # deployment knows the network such a proxy reaches this container
+      # from, and until it says so every request through one arrives as
+      # the proxy itself.
+      TRUSTED_PROXY_NETWORK: ${TRUSTED_PROXY_NETWORK:-}
     volumes:
       - nginx-cache:/var/cache/nginx/images
     networks:
