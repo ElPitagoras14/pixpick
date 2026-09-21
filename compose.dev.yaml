@@ -200,6 +200,11 @@ services:
       # this. The same value the backend gets as MINIO_BROWSER_ENDPOINT, so
       # the two can never differ.
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
+      # Empty unless a platform's own proxy stands in front: only the
+      # deployment knows the network such a proxy reaches this container
+      # from, and until it says so every request through one arrives as
+      # the proxy itself.
+      TRUSTED_PROXY_NETWORK: ${TRUSTED_PROXY_NETWORK:-}
     volumes:
       - nginx-cache:/var/cache/nginx/images
     networks:

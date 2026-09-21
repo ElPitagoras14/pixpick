@@ -27,11 +27,28 @@ if [ -z "$STORAGE_PUBLIC_HOSTNAME" ]; then
 fi
 export STORAGE_PUBLIC_HOSTNAME
 
+# Optional, and one `set_real_ip_from` per entry: the proxy a platform
+# puts in front reaches this container from a network of its own, which
+# the template cannot name because it differs per platform. Validated
+# here rather than trusted, because envsubst would drop anything shaped
+# wrong straight into the server config, where nginx would refuse to
+# start on it. Separated by spaces or commas.
+TRUSTED_PROXY_DIRECTIVES=""
+for network in $(echo "${TRUSTED_PROXY_NETWORK:-}" | tr ',' ' '); do
+	if ! echo "$network" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$'; then
+		echo "entrypoint: TRUSTED_PROXY_NETWORK holds something that is not an address or a CIDR range: $network" >&2
+		exit 1
+	fi
+	TRUSTED_PROXY_DIRECTIVES="${TRUSTED_PROXY_DIRECTIVES}set_real_ip_from ${network};
+"
+done
+export TRUSTED_PROXY_DIRECTIVES
+
 # Restricting envsubst's variable list keeps it from touching the
 # template's own `$name`-shaped nginx variables (`$remote_addr` and the
-# rest). The rate and connection limits are fixed in the template, so this
-# is the only placeholder left.
-envsubst '${STORAGE_PUBLIC_HOSTNAME}' \
+# rest). The rate and connection limits are fixed in the template, so
+# these two are the placeholders left.
+envsubst '${STORAGE_PUBLIC_HOSTNAME} ${TRUSTED_PROXY_DIRECTIVES}' \
 	< /etc/pixpick/nginx.conf.template \
 	> /etc/nginx/conf.d/default.conf
 

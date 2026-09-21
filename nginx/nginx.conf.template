@@ -11,6 +11,14 @@ proxy_cache_path /var/cache/nginx/images levels=1:2 keys_zone=images_cache:10m
 # equal. It leaves out the gateway, the address a connection from outside
 # arrives as, so a forged X-Forwarded-For from there is not trusted.
 set_real_ip_from 172.30.238.128/25;
+# Written by nginx/entrypoint.sh out of TRUSTED_PROXY_NETWORK, and empty
+# unless a deployment names one. A platform that puts its own proxy in
+# front reaches this container over a network of its own rather than the
+# one above, and that range belongs to the platform, so neither compose
+# file can state it. Left unnamed, every request through such a proxy
+# arrives as the proxy's own address, and the limits below then meter the
+# whole internet as a single client.
+${TRUSTED_PROXY_DIRECTIVES}
 real_ip_header X-Forwarded-For;
 
 limit_req_zone $binary_remote_addr zone=api_rate:10m rate=600r/m;
