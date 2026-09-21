@@ -170,7 +170,7 @@ jobs:
           VERSION: ${{ needs.detect.outputs.version }}
         run: |
           key="$(printf '%s' "$DOKPLOY_API_KEY" | tr -d '[:space:]')"
-          curl --fail-with-body -sS -X POST https://dokploy.pitagoraslab.qzz.io/api/compose.deploy \
+          curl --fail-with-body -sS -X POST https://dokploy.elpitagoras14.qzz.io/api/compose.deploy \
             -H 'Accept: application/json' \
             -H 'Content-Type: application/json' \
             -H "x-api-key: $key" \
