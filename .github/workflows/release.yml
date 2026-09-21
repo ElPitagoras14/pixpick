@@ -64,6 +64,9 @@ jobs:
   publish:
     needs: detect
     if: needs.detect.outputs.release == 'true'
+    # Without a name of its own, a matrix leg is labelled with every value
+    # of its entry concatenated, pathspec included.
+    name: ${{ matrix.service }}
     runs-on: ubuntu-latest
     strategy:
       # A broken service means no release either way, so legs still in flight
