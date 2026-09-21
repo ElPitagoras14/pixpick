@@ -1,6 +1,3 @@
-# The repository's only workflow. A release happens when VERSION rises above
-# the highest tag already published; anything else integrated into main runs
-# the detection and stops there.
 name: Release
 
 on:
@@ -11,9 +8,6 @@ permissions:
   contents: write
   packages: write
 
-# Two releases must never interleave: the second would compare against a tag
-# the first has not created yet. Nothing in flight is cancelled, because a
-# half-published release leaves images that no release ever names.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -31,19 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # Without the whole history there are no tags, and every run would
-          # look like the first release.
           fetch-depth: 0
 
       - id: version
         name: Compare the declared version against the published one
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
-          # The highest tag by precedence, not the most recent one by
-          # topology: git describe returns the latter, and the two stop
-          # agreeing as soon as anyone tags out of order or rewrites history.
-          # sort -V orders each segment numerically, which is what keeps
-          # 0.1.10 above 0.1.9 instead of below it.
           previous="$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)"
           if [ -z "$previous" ]; then
             release=true
@@ -64,21 +51,12 @@ jobs:
   publish:
     needs: detect
     if: needs.detect.outputs.release == 'true'
-    # Without a name of its own, a matrix leg is labelled with every value
-    # of its entry concatenated, pathspec included.
     name: ${{ matrix.service }}
     runs-on: ubuntu-latest
     strategy:
-      # A broken service means no release either way, so legs still in flight
-      # are cancelled instead of pushing more images the run will not name.
       fail-fast: true
       matrix:
         include:
-          # Each service declares its build context and a pathspec that starts
-          # from it and subtracts what the service versions but does not bake.
-          # Defined by exclusion, never by enumeration: a file nobody listed
-          # costs one needless build here, and would have cost an image that
-          # lies about its code the other way around.
           - service: backend
             context: backend
             paths: backend :!backend/tests
@@ -113,16 +91,8 @@ jobs:
           PATHS: ${{ matrix.paths }}
           PREVIOUS: ${{ needs.detect.outputs.previous }}
         run: |
-          # Building is the default, so every case this does not recognise --
-          # the first release, a service just added, a purged registry --
-          # falls towards building rather than towards publishing an image
-          # that does not match the code.
           build=true
           if [ -n "$PREVIOUS" ] && docker buildx imagetools inspect "$IMAGE:$PREVIOUS" >/dev/null 2>&1; then
-            # The pathspec has to reach git as separate arguments, and the
-            # shell does not re-read quotes that come out of a variable:
-            # quoting this would hand git a path starting with a quote and the
-            # exclusion would evaporate without an error.
             # shellcheck disable=SC2086
             if git diff --quiet "$PREVIOUS" HEAD -- $PATHS; then
               build=false
@@ -131,8 +101,6 @@ jobs:
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "$IMAGE: build=$build"
 
-      # Declared rather than trusted to the runner image: binfmt being
-      # configured there is not part of its contract.
       - uses: docker/setup-qemu-action@v3
         if: steps.decide.outputs.build == 'true'
 
@@ -146,17 +114,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ needs.detect.outputs.version }}
-          # In the registry, not in Actions storage, which evicts what has not
-          # been read in a week and would arrive cold between releases. Only
-          # where there is something expensive to cache: uv sync and pnpm
-          # install, which are what emulation makes slow.
           cache-from: ${{ matrix.cache && format('type=registry,ref={0}-{1}:buildcache', env.IMAGE_PREFIX, matrix.service) || '' }}
           cache-to: ${{ matrix.cache && format('type=registry,ref={0}-{1}:buildcache,mode=max', env.IMAGE_PREFIX, matrix.service) || '' }}
 
-      # Copying the manifest, not rebuilding against a cache: the registry
-      # keeps one manifest under two names, so the new name is the same bits
-      # and serves the same architectures, with nothing uploaded and nothing
-      # to download for whoever already has the previous version.
       - name: Reuse the image from the previous release
         if: steps.decide.outputs.build == 'false'
         env:
@@ -165,9 +125,6 @@ jobs:
           PREVIOUS: ${{ needs.detect.outputs.previous }}
         run: docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE:$PREVIOUS"
 
-  # A step of its own, after the whole matrix: the :<version> images appear
-  # one at a time, but nobody asks for them by that name. compose.yaml asks
-  # for latest, which until here still points at the previous version, whole.
   promote:
     needs: [detect, publish]
     runs-on: ubuntu-latest
@@ -187,9 +144,6 @@ jobs:
             docker buildx imagetools create --tag "$image:latest" "$image:$VERSION"
           done
 
-  # Last, because the tag is the proof that the release finished. A run that
-  # dies before here leaves no trace, so the next one sees the same pending
-  # changes from the same reference and redoes the work whole.
   record:
     needs: [detect, promote]
     runs-on: ubuntu-latest
@@ -202,13 +156,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.detect.outputs.version }}
-        # The same name the images carry: the next release uses it as the
-        # reference to compare against and to reuse from.
         run: gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes
 
-  # The images and the tag are valid on their own, so a platform that is
-  # down or slow to answer must not turn a finished release into a failed
-  # one. Retrying this needs nothing rebuilt.
   deploy:
     needs: [detect, record]
     runs-on: ubuntu-latest
@@ -219,17 +168,8 @@ jobs:
           DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
           DOKPLOY_COMPOSE_ID: ${{ vars.DOKPLOY_COMPOSE_ID }}
           VERSION: ${{ needs.detect.outputs.version }}
-        # It pulls :latest, which promote has already moved, so the call
-        # carries the version only as the name this deployment gets on the
-        # platform's own history.
         run: |
-          # A key pasted with a trailing newline would reach curl as a
-          # malformed header and come back as a rejected credential, which
-          # reads exactly like a wrong key. Same treatment VERSION gets.
           key="$(printf '%s' "$DOKPLOY_API_KEY" | tr -d '[:space:]')"
-          # --fail-with-body rather than -f: the call still fails the step,
-          # but the platform's own explanation reaches the log instead of a
-          # bare exit code.
           curl --fail-with-body -sS -X POST https://dokploy.pitagoraslab.qzz.io/api/compose.deploy \
             -H 'Accept: application/json' \
             -H 'Content-Type: application/json' \
