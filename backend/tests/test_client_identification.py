@@ -17,7 +17,7 @@ _COMPOSE = ["docker", "compose", "-f", "compose.dev.yaml"]
 
 def _nginx_log_tail(lines: int = 50) -> str:
     result = subprocess.run(
-        [*_COMPOSE, "logs", "nginx", "--no-color", "--tail", str(lines)],
+        [*_COMPOSE, "logs", "pixpick-nginx", "--no-color", "--tail", str(lines)],
         capture_output=True,
         text=True,
         check=True,
@@ -27,7 +27,7 @@ def _nginx_log_tail(lines: int = 50) -> str:
 
 def _backend_log_tail(lines: int = 50) -> str:
     result = subprocess.run(
-        [*_COMPOSE, "logs", "backend", "--no-color", "--tail", str(lines)],
+        [*_COMPOSE, "logs", "pixpick-backend", "--no-color", "--tail", str(lines)],
         capture_output=True,
         text=True,
         check=True,
@@ -77,11 +77,11 @@ async def test_a_declared_address_from_inside_the_network_is_trusted(running_sta
     marker = f"probe-{uuid.uuid4().hex}"
     script = (
         "import httpx;"
-        f"httpx.get('http://nginx/api/health?{marker}=1', "
+        f"httpx.get('http://pixpick-nginx/api/health?{marker}=1', "
         "headers={'X-Forwarded-For': '9.9.9.9'})"
     )
     subprocess.run(
-        [*_COMPOSE, "exec", "-T", "backend", "python", "-c", script],
+        [*_COMPOSE, "exec", "-T", "pixpick-backend", "python", "-c", script],
         capture_output=True,
         text=True,
         check=True,

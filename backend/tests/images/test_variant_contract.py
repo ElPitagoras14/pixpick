@@ -3,8 +3,8 @@ actually resolve through nginx, against the real transformer and storage
 this local environment provides.
 
 Requires the local environment already running with at least `postgres
-storage transformer nginx` up: docker compose -f compose.dev.yaml up -d \\
-postgres storage transformer nginx
+storage transformer pixpick-nginx` up: docker compose -f compose.dev.yaml up \\
+-d postgres storage transformer pixpick-nginx
 """
 
 import base64

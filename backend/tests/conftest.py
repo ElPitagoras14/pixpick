@@ -145,7 +145,7 @@ def running_stack():
                 "--status",
                 "running",
                 "-q",
-                "nginx",
+                "pixpick-nginx",
             ],
             capture_output=True,
             text=True,
@@ -155,7 +155,7 @@ def running_stack():
         pytest.skip("docker is not available")
         return
     if not result.stdout.strip():
-        pytest.skip("compose.dev.yaml's nginx is not running")
+        pytest.skip("compose.dev.yaml's pixpick-nginx is not running")
 
 
 @pytest.fixture

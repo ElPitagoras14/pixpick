@@ -30,7 +30,7 @@ _BUILT = _REPO_ROOT / "compose.dev.yaml"
 # other key is compared verbatim.
 _MAY_DIFFER = frozenset({"image", "build", "ports"})
 
-# `migrate` alone may also differ on these two: compose.dev.yaml already
+# `pixpick-migrate` alone may also differ on these two: compose.dev.yaml already
 # assumes the repo is checked out to build the image from source, so it also
 # bind-mounts dbmate/ and drops --no-dump-schema, regenerating
 # dbmate/schema.sql as part of coming up. compose.yaml consumes the
@@ -79,7 +79,9 @@ def test_every_field_but_the_image_and_the_ports_is_identical(published, built):
     offenders = []
     for name in sorted(set(published["services"]) & set(built["services"])):
         here, there = published["services"][name], built["services"][name]
-        may_differ = _MAY_DIFFER | _MIGRATE_MAY_ALSO_DIFFER if name == "migrate" else _MAY_DIFFER
+        may_differ = (
+            _MAY_DIFFER | _MIGRATE_MAY_ALSO_DIFFER if name == "pixpick-migrate" else _MAY_DIFFER
+        )
         for field in sorted((set(here) | set(there)) - may_differ):
             offenders += _disagreements(f"{name}.{field}", here.get(field), there.get(field))
     assert not offenders, (
